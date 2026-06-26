@@ -1,0 +1,2034 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flowly</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+  :root{
+    --bg:#F7F8FA; --panel:#fff; --panel2:#F4F5F7; --ink:#13151A; --ink-soft:#90959E;
+    --line:rgba(20,22,28,0.08); --good:#3F8E5B; --bad:#C24B3C; --warn:#C8862D; --accent:#13151A; --blob:#A9C2EE;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:'Pretendard',sans-serif; padding:20px; min-height:100vh; }
+  .blob{ position:fixed; top:-260px; left:50%; transform:translateX(-50%); width:1300px; height:480px; max-width:170vw;
+    background:radial-gradient(ellipse at center, var(--blob) 0%, rgba(169,194,238,.3) 45%, rgba(169,194,238,0) 75%);
+    filter:blur(60px); opacity:.5; pointer-events:none; z-index:0; }
+  .app{ position:relative; z-index:1; max-width:1320px; margin:0 auto; display:grid; grid-template-columns:220px 1fr; gap:18px; }
+  h1,h2,h3{ margin:0; }
+  .sidebar{ background:#fff; border:1px solid var(--line); border-radius:20px; padding:18px 14px; display:flex; flex-direction:column; height:fit-content; }
+  .brand{ font-size:19px; font-weight:700; padding:6px 8px 20px; font-family:'Poppins',sans-serif; }
+  .nav-item{ display:flex; align-items:center; gap:9px; padding:10px 12px; border-radius:10px; font-size:13.5px; color:var(--ink-soft); cursor:pointer; margin-bottom:2px; }
+  .nav-item:hover{ background:var(--panel2); color:var(--ink); }
+  .nav-item.active{ background:var(--accent); color:#fff; font-weight:600; }
+  .main{ min-width:0; }
+  .pagehead{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px; }
+  .pagehead h2{ font-size:24px; }
+  .topsearch{ background:#fff; border-radius:999px; padding:9px 16px; min-width:260px; box-shadow:0 1px 0 var(--line); display:flex; gap:8px; }
+  .topsearch input{ border:none; outline:none; background:transparent; font-family:inherit; font-size:13px; flex:1; }
+
+  section{ display:none; } section.active{ display:block; }
+  .card{ background:#fff; border-radius:18px; padding:16px 18px; border:1px solid var(--line); overflow-x:auto; }
+  .cardgrid{ display:grid; gap:14px; margin-bottom:18px; }
+  .cardgrid.c4{ grid-template-columns:repeat(4,1fr); }
+  .cardgrid.c3{ grid-template-columns:repeat(3,1fr); }
+  .cardgrid.c2{ grid-template-columns:repeat(2,1fr); }
+  .stat-label{ font-size:11px; color:var(--ink-soft); margin-bottom:6px; }
+  .stat-value{ font-size:19px; font-weight:700; }
+  .stat-sub{ font-size:11px; color:var(--ink-soft); margin-top:4px; }
+
+  .btn{ font-family:inherit; border:none; cursor:pointer; border-radius:999px; padding:0 18px; height:38px; font-size:12.5px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; line-height:1; transition:opacity .12s; }
+  .btn:hover{ opacity:.88; }
+  .btn.dark{ background:var(--accent); color:#fff; }
+  .btn.light{ background:#fff; color:#444B57; border:1px solid var(--line); box-shadow:none; }
+  .btn.outline{ background:#fff; color:#444B57; border:1px solid var(--line); box-shadow:none; }
+  .btn.danger{ background:#fff; color:var(--bad); border:1px solid rgba(194,75,60,.28); }
+  .btn.sm{ padding:0 13px; height:30px; font-size:11.5px; }
+  select.chip, input.chip{ border:1px solid var(--line); background-color:#fff; border-radius:999px; padding:0 16px; height:38px; font-size:13.5px; font-family:inherit; min-width:140px; display:inline-flex; align-items:center; }
+  .iconbtn-sm{ border:none; background:transparent; cursor:pointer; color:var(--ink-soft); font-size:13px; }
+  /* unified field height/alignment */
+  .field input, .field select, .field textarea{ height:40px; box-sizing:border-box; display:flex; align-items:center; }
+  .field textarea{ height:auto; padding-top:9px; align-items:flex-start; }
+  select{
+    -webkit-appearance:none; -moz-appearance:none; appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%2390959E' d='M4 6l4 4 4-4z'/></svg>");
+    background-repeat:no-repeat; background-position:right 12px center; background-size:11px; padding-right:32px !important;
+  }
+  select:focus, input:focus, textarea:focus, .btn:focus{
+    outline:none; box-shadow:0 0 0 3px rgba(19,21,26,0.12); border-color:#C7CBD2;
+  }
+  #tasksCard.dark .iconbtn-sm{ color:rgba(255,255,255,.6); }
+
+  .toolbar{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
+
+  table{ width:100%; border-collapse:collapse; font-size:14px; table-layout:auto; }
+  th{ text-align:left; color:var(--ink-soft); font-size:12px; text-transform:uppercase; letter-spacing:.4px; padding:8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td{ padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th:last-child, td:last-child{ width:1%; white-space:nowrap; }
+  td select.chip{ min-width:0; width:auto; }
+  .right{ text-align:right; }
+  .empty{ color:var(--ink-soft); font-size:13px; padding:24px 0; text-align:center; }
+
+  .badge{ font-size:12px; padding:3px 9px; border-radius:999px; font-weight:600; display:inline-block; }
+  .badge.unbilled{ background:#F4E7D6; color:var(--warn); }
+  .badge.billed{ background:#E3E8FB; color:#3B4FA0; }
+  .badge.partial{ background:#FBE7D9; color:#B05A2E; }
+  .badge.paid{ background:#DDEFD8; color:var(--good); }
+  .badge.salary{ background:#EBEDEF; color:#6B7280; }
+  .badge.project{ background:#E3E8FB; color:#3B4FA0; }
+  .badge.todo{ background:#EFE6F8; color:#7B4FB0; }
+  .badge.doing{ background:#FCEBC9; color:#9C6B12; }
+  .badge.done{ background:#DDEFD8; color:var(--good); }
+  .badge.urgent{ background:#FBDADA; color:#B0312F; }
+  .badge.high{ background:#FBE7D9; color:#B05A2E; }
+  .badge.normal{ background:#EFEFEF; color:#666; }
+  .badge.low{ background:#F2F2F2; color:#999; }
+  .badge.overdue{ background:#FBDADA; color:#B0312F; }
+  .badge.draft{ background:#EFEFEF; color:#666; }
+  .badge.issued{ background:#E3E8FB; color:#3B4FA0; }
+
+  .row-flex{ display:flex; align-items:center; gap:10px; }
+  .iconbtn-sm:hover{ color:var(--ink); }
+
+  /* grid-based row table (robust divider/actions) */
+  .wl-head, .wl-row{ display:grid; grid-template-columns:100px 130px 1.7fr 110px 110px 110px 110px 90px; align-items:center; column-gap:16px; padding:0 6px; }
+  .wl-head{ color:var(--ink-soft); font-size:12px; text-transform:uppercase; letter-spacing:.4px; padding-bottom:10px; border-bottom:1px solid var(--line); }
+  .wl-row{ min-height:60px; border-bottom:1px solid var(--line); cursor:pointer; font-size:14px; }
+  .wl-row:hover{ background:var(--panel2); }
+  .wl-row:last-child{ border-bottom:none; }
+  .wl-row .cell-num{ text-align:right; }
+  .wl-row .cell-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wl-row .cell-title:hover{ text-decoration:underline; }
+  .actions-cell{ display:flex; justify-content:flex-end; gap:14px; align-items:center; }
+  @media (max-width:900px){
+    .wl-head{ display:none; }
+    .wl-row{ grid-template-columns:1fr; grid-auto-rows:auto; row-gap:4px; padding:12px 6px; }
+  }
+
+  /* detail drawer */
+  .drawer-overlay{ display:none; position:fixed; inset:0; background:rgba(15,17,20,.4); z-index:90; }
+  .drawer-overlay.open{ display:block; }
+  .drawer-panel{ position:fixed; top:0; right:0; height:100%; width:420px; max-width:92vw; background:#fff; box-shadow:-8px 0 30px rgba(0,0,0,.12); overflow-y:auto; padding:24px; transform:translateX(100%); transition:transform .22s ease; }
+  .drawer-overlay.open .drawer-panel{ transform:translateX(0); }
+  .drawer-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
+  .drawer-head h3{ font-size:18px; }
+  .drawer-section{ margin-bottom:18px; }
+  .drawer-section h4{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+  .drawer-row{ display:flex; justify-content:space-between; font-size:13px; padding:6px 0; border-bottom:1px solid var(--line); }
+  .drawer-row:last-child{ border-bottom:none; }
+  .drawer-row .lbl{ color:var(--ink-soft); }
+  .drawer-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+
+  /* modal */
+  .modal-overlay{ display:none; position:fixed; inset:0; background:rgba(15,17,20,.45); z-index:80; align-items:center; justify-content:center; padding:20px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:#fff; border-radius:18px; padding:22px; max-width:560px; width:100%; max-height:88vh; overflow:auto; }
+  .modal-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .modal-head h3{ font-size:16px; }
+  .modal-close{ border:none; background:var(--panel2); width:26px; height:26px; border-radius:50%; cursor:pointer; }
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:11px; color:var(--ink-soft); margin-bottom:4px; }
+  .field input, .field select, .field textarea{
+    width:100%; font-family:inherit; border:1px solid var(--line); background-color:var(--panel2); border-radius:9px; padding:9px 10px; font-size:13px; color:var(--ink);
+  }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  /* toast */
+  #toastWrap{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:100; display:flex; flex-direction:column; gap:8px; align-items:center; }
+  .toast{ background:var(--accent); color:#fff; padding:10px 18px; border-radius:999px; font-size:12.5px; box-shadow:0 4px 18px rgba(0,0,0,.2); animation:toastIn .15s ease; }
+  @keyframes toastIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+
+  /* invoice doc */
+  #invoiceDoc{ background:#fff; border-radius:14px; padding:34px; }
+  #invoiceDoc table{ font-size:12px; }
+  .inv-top{ display:flex; justify-content:space-between; margin-bottom:22px; }
+  .inv-total-row{ text-align:right; font-size:18px; font-weight:700; margin-top:12px; }
+  .invoice-list-card{ display:flex; align-items:center; gap:10px; padding:10px; border-bottom:1px solid var(--line); font-size:12.5px; }
+
+  .bars-mini{ display:flex; align-items:flex-end; gap:8px; height:80px; margin-top:6px; }
+  .bars-mini i{ flex:1; background:var(--accent); border-radius:4px 4px 0 0; display:block; min-height:3px; }
+  .bars-mini .lbl{ font-size:9.5px; color:var(--ink-soft); text-align:center; margin-top:4px; }
+
+  /* dashboard (restored) */
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .cal-head button{ border:none; background:var(--panel2); width:26px; height:26px; border-radius:50%; cursor:pointer; color:var(--ink-soft); font-size:15px; }
+  .cal-title{ background:var(--accent); color:#fff; font-size:12px; font-weight:600; padding:6px 16px; border-radius:999px; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; text-align:center; font-size:11.5px; }
+  .cal-grid .dow{ color:var(--ink-soft); font-weight:600; padding-bottom:6px; font-size:10.5px; }
+  .cal-grid .day{ aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; border-radius:50%; color:var(--ink); background:transparent; font-size:12px; cursor:pointer; }
+  .cal-grid .day:hover{ background:var(--panel2); }
+  .cal-grid .day.muted{ color:#D3D6DB; cursor:default; }
+  .cal-grid .day.muted:hover{ background:transparent; }
+  .cal-grid .day.today{ background:var(--accent); color:#fff; font-weight:700; }
+  .cal-grid .day.has:not(.today){ box-shadow:inset 0 -3px 0 var(--blob); }
+  .cal-addevent{ width:100%; margin-top:14px; background:var(--accent); color:#fff; border:none; border-radius:999px; padding:11px 0; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .stat{ margin-bottom:8px; } .stat b{ font-size:18px; display:block; } .stat span{ font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.5px; }
+  .diff{ font-size:12px; font-weight:600; padding:3px 9px; border-radius:20px; display:inline-block; margin-top:6px; }
+  .diff.up{ background:rgba(63,142,91,.12); color:var(--good); } .diff.down{ background:rgba(194,75,60,.12); color:var(--bad); }
+  .progressline{ height:6px; border-radius:4px; background:var(--panel2); overflow:hidden; margin-top:10px; }
+  .progressline i{ display:block; height:100%; background:var(--accent); border-radius:4px; }
+  .row-item{ display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid var(--line); font-size:12.5px; cursor:pointer; }
+  .row-item:hover{ background:var(--panel2); border-radius:12px; }
+  .row-item:last-child{ border-bottom:none; }
+  .avatar{ width:30px;height:30px;border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff; flex:none; }
+  .row-item .meta{ flex:1; } .row-item .meta b{ display:block; font-size:13px; } .row-item .meta span{ color:var(--ink-soft); font-size:11px; }
+  .entry-detail{ background:#15181C; color:#fff; border-radius:18px; padding:20px; min-height:200px; }
+  .entry-detail .ed-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+  .entry-detail .ed-head b{ font-size:15px; display:block; } .entry-detail .ed-head span{ font-size:12px; color:rgba(255,255,255,.55); }
+  .entry-detail .ed-pill{ background:#fff !important; color:#15181C !important; font-size:11px; font-weight:600; padding:5px 12px; border-radius:999px; }
+  .entry-detail .ed-tags{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; }
+  .entry-detail .ed-tags span{ background:rgba(255,255,255,.1); font-size:11px; padding:5px 12px; border-radius:999px; }
+  .entry-detail .ed-row{ display:flex; gap:14px; font-size:12.5px; padding:9px 0; border-bottom:1px solid rgba(255,255,255,.1); }
+  .entry-detail .ed-row:last-of-type{ border-bottom:none; }
+  .entry-detail .ed-row .ed-label{ width:64px; color:rgba(255,255,255,.45); flex:none; }
+  .entry-detail .ed-invoice-btn{ width:100%; margin-top:16px; background:#fff; color:#15181C; border:none; border-radius:999px; padding:11px 0; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+  #tasksCard.dark{ background:#000; color:#fff; }
+  #tasksCard.dark .row-item{ border-bottom:1px solid rgba(255,255,255,.12); }
+  #tasksCard.dark .row-item:hover{ background:rgba(255,255,255,.06); }
+  #tasksCard.dark .row-item .meta span{ color:rgba(255,255,255,.55); }
+  #tasksCard.dark .iconbtn-sm{ color:rgba(255,255,255,.6); }
+  .timeline-item{ display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); font-size:12.5px; }
+  .timeline-item:last-child{ border-bottom:none; }
+  .timeline-dot{ width:8px;height:8px;border-radius:50%; background:var(--blob); margin-top:5px; flex:none; }
+  @media (max-width:700px){ .recent-split{ grid-template-columns:1fr; } .content-grid{ grid-template-columns:1fr !important; } }
+
+  @media (max-width:900px){
+    .app{ grid-template-columns:1fr; }
+    .sidebar{ flex-direction:row; overflow-x:auto; white-space:nowrap; }
+    .nav-item{ flex:none; }
+    .cardgrid.c4, .cardgrid.c3, .cardgrid.c2{ grid-template-columns:1fr 1fr; }
+    .field-row{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="blob"></div>
+<div id="toastWrap"></div>
+<div class="app">
+
+  <div class="sidebar">
+    <div class="brand">Flowly</div>
+    <div class="nav-item active" data-tab="dashboard">▦ Dashboard</div>
+    <div class="nav-item" data-tab="tasks">☑ Tasks · 할 일</div>
+    <div class="nav-item" data-tab="worklog">≡ Work Log · 업무기록</div>
+    <div class="nav-item" data-tab="income">₩ Income · 수입기록</div>
+    <div class="nav-item" data-tab="invoices">$ Invoices · 인보이스</div>
+    <div class="nav-item" data-tab="receipts">▣ Receipts · 영수증</div>
+    <div class="nav-item" data-tab="clients">◎ Clients · 클라이언트</div>
+    <div class="nav-item" data-tab="projects">▣ Projects · 프로젝트</div>
+    <div class="nav-item" data-tab="settings">⚙ Settings · 설정</div>
+  </div>
+
+  <div class="main">
+    <div class="pagehead">
+      <div class="topsearch">⌕<input id="globalSearch" placeholder="Search"></div>
+    </div>
+    <div id="searchResultsWrap"></div>
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="active">
+      <div class="greeting" style="margin-bottom:20px;">
+        <h1 id="greetText" style="font-family:'Poppins',sans-serif;font-weight:700;font-size:30px;letter-spacing:-.5px;">Good morning, yeonni</h1>
+        <p id="greetSub" style="color:var(--ink-soft);font-size:13.5px;margin-top:6px;max-width:480px;line-height:1.5;"></p>
+      </div>
+
+      <div class="content-grid" style="display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start;">
+        <div>
+          <div class="cardgrid c2" style="margin-bottom:18px;">
+            <div class="card" id="incomeCard" style="display:flex;flex-direction:column;">
+              <h3 style="font-size:14.5px;margin-bottom:6px;">이번 달 수입</h3>
+              <div id="incomeChart" style="flex:1;"></div>
+            </div>
+            <div class="card" id="taskStatusCard" style="display:flex;flex-direction:column;"><h3 style="font-size:14.5px;margin-bottom:6px;">할 일 현황</h3><div id="taskStat" style="flex:1;display:flex;flex-direction:column;justify-content:center;"></div></div>
+          </div>
+
+          <div class="card" style="margin-bottom:18px;">
+            <div class="row-flex" style="justify-content:space-between;margin-bottom:8px;"><h3 style="font-size:15px;">최근 업무</h3><button class="iconbtn-sm" data-tab="worklog">전체보기 ›</button></div>
+            <div class="recent-split" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+              <div id="recentEntries"></div>
+              <div id="entryDetail" class="entry-detail"><div class="empty" style="padding:50px 0;">업무를 선택하면<br>상세 내용이 여기 표시돼요</div></div>
+            </div>
+          </div>
+
+          <div class="card" id="tasksCard">
+            <div class="row-flex" style="justify-content:space-between;margin-bottom:8px;"><h3 style="font-size:15px;">진행 중인 할 일</h3><button class="iconbtn-sm" data-tab="tasks">전체보기 ›</button></div>
+            <div id="recentTasks"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="cal-card card" style="margin-bottom:16px;">
+            <div class="cal-head"><button id="calPrev">‹</button><div class="cal-title" id="calTitle"></div><button id="calNext">›</button></div>
+            <div class="cal-grid" id="calGrid"></div>
+            <button class="cal-addevent" id="calAddEventBtn">+ 할 일 추가</button>
+          </div>
+          <div class="card">
+            <h3 style="font-size:14px;margin-bottom:6px;">오늘 할 일</h3>
+            <div id="todayTimeline"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    </section>
+
+    <!-- TASKS -->
+    <section id="tasks">
+      <div class="pagehead"><h2>할 일</h2><button class="btn dark" id="addTaskBtn">+ 할 일 추가</button></div>
+      <div class="toolbar">
+        <select class="chip" id="taskFilterStatus">
+          <option value="">전체 상태</option><option value="todo">할 일</option><option value="doing">진행 중</option><option value="done">완료</option>
+        </select>
+        <select class="chip" id="taskFilterUrgent"><option value="">전체</option><option value="urgent">긴급만</option><option value="unpaid">미수금만</option></select>
+        <select class="chip" id="taskSort">
+          <option value="recent">최신순</option><option value="old">오래된순</option><option value="amountHigh">금액 높은순</option><option value="amountLow">금액 낮은순</option><option value="due">마감일 가까운순</option><option value="priority">중요도 높은순</option>
+        </select>
+      </div>
+      <div class="card"><div id="taskListWrap"></div></div>
+    </section>
+
+    <!-- WORKLOG -->
+    <section id="worklog">
+      <div class="pagehead"><h2>업무 기록</h2><button class="btn dark" id="addWorklogBtn">+ 기록 추가</button></div>
+      <div class="toolbar">
+        <select class="chip" id="wlFilterClient"><option value="">전체 클라이언트</option></select>
+        <select class="chip" id="wlFilterPay"><option value="">전체 결제상태</option><option value="unbilled">미청구</option><option value="billed">청구완료</option><option value="partial">부분입금</option><option value="paid">입금완료</option></select>
+      </div>
+      <div class="card"><div id="worklogWrap"></div></div>
+    </section>
+
+    <!-- INCOME -->
+    <section id="income">
+      <div class="pagehead"><h2>내 수입기록</h2>
+        <div class="row-flex">
+          <button class="btn light" id="manageCategoriesBtn">카테고리 관리</button>
+          <button class="btn dark" id="addIncomeBtn">+ 수입 추가</button>
+        </div>
+      </div>
+      <div class="cardgrid c2" id="incomeTopStats" style="margin-bottom:14px;"></div>
+      <div class="cardgrid c3" id="incomeBreakdown" style="margin-bottom:20px;"></div>
+
+      <div class="toolbar" id="incomeTypeTabs" style="margin-bottom:16px;"></div>
+      <div class="card"><div id="incomeTableWrap"></div></div>
+    </section>
+
+    <!-- INVOICES -->
+    <section id="invoices">
+      <div class="pagehead"><h2>인보이스</h2></div>
+      <div class="card" style="margin-bottom:18px;">
+        <div class="field-row">
+          <div class="field"><label>클라이언트</label><select id="inv-client"></select></div>
+          <div class="field"><label>발행일</label><input type="date" id="inv-issue"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>입금 기한</label><input type="date" id="inv-due"></div>
+          <div class="field"><label>인보이스 언어 / 통화 (클라이언트 국가 기준 자동)</label><input id="inv-lang-preview" disabled></div>
+        </div>
+        <div class="toolbar">
+          <button class="btn light" id="loadUnpaidBtn">미수금 항목 불러오기</button>
+          <button class="btn light" id="loadMilestoneBtn">프로젝트 결제 단계 불러오기</button>
+          <button class="btn light" id="loadExpenseBtn">청구 가능 비용 불러오기</button>
+          <button class="btn light" id="addManualItemBtn">+ 수동 항목 추가</button>
+        </div>
+        <div id="invItemsWrap"></div>
+        <div style="text-align:right;font-weight:700;margin-top:10px;" id="invRunningTotal"></div>
+        <div class="field" style="margin-top:12px;"><label>메모</label><textarea id="inv-memo" rows="2"></textarea></div>
+        <button class="btn dark" id="buildInvoiceBtn" style="margin-top:8px;">인보이스 생성</button>
+      </div>
+
+      <div id="invoiceDocWrap" style="display:none;">
+        <div id="invoiceDoc"></div>
+        <div class="toolbar" style="margin-top:14px;">
+          <button class="btn dark" id="pdfBtn">PDF로 저장</button>
+          <button class="btn light" id="editInvoiceBtn">수정</button>
+        </div>
+      </div>
+
+      <h3 style="font-size:15px;margin:24px 0 10px;">저장된 인보이스</h3>
+      <div class="card"><div id="savedInvoicesWrap"></div></div>
+    </section>
+
+    <!-- RECEIPTS -->
+    <section id="receipts">
+      <div class="pagehead"><h2>영수증</h2><button class="btn dark" id="addReceiptBtn">+ 영수증 추가</button></div>
+      <div class="toolbar">
+        <select class="chip" id="rcFilterClient"><option value="">전체 클라이언트</option></select>
+        <select class="chip" id="rcFilterType"><option value="">전체 비용유형</option><option value="work">업무 비용</option><option value="personal">개인 비용</option><option value="toBill">클라이언트 청구 예정</option><option value="billed">청구 완료</option><option value="settled">이미 정산 받음</option></select>
+      </div>
+      <div class="card"><div id="receiptListWrap"></div></div>
+    </section>
+
+    <!-- CLIENTS -->
+    <section id="clients">
+      <div class="pagehead"><h2>클라이언트</h2><button class="btn dark" id="addClientBtn">+ 클라이언트 추가</button></div>
+      <div class="cardgrid c3" id="clientCardsWrap"></div>
+    </section>
+
+    <!-- PROJECTS -->
+    <section id="projects">
+      <div class="pagehead"><h2>프로젝트</h2><button class="btn dark" id="addProjectBtn">+ 프로젝트 추가</button></div>
+      <div class="cardgrid c2" id="projectCardsWrap"></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="settings">
+      <div class="pagehead"><h2>설정</h2></div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3 style="font-size:14px;margin-bottom:12px;">내 정보 / 브랜드</h3>
+        <div class="field-row">
+          <div class="field"><label>브랜드명</label><input id="st-brand"></div>
+          <div class="field"><label>이메일</label><input id="st-email"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>전화번호</label><input id="st-phone"></div>
+          <div class="field"><label>기본 통화</label>
+            <select id="st-defcur"><option value="KRW">KRW</option><option value="CAD">CAD</option><option value="USD">USD</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3 style="font-size:14px;margin-bottom:12px;">한국 계좌 정보 (한국 클라이언트 인보이스용)</h3>
+        <div class="field-row">
+          <div class="field"><label>은행</label><input id="st-bankkr-bank"></div>
+          <div class="field"><label>계좌번호</label><input id="st-bankkr-account"></div>
+        </div>
+        <div class="field"><label>예금주</label><input id="st-bankkr-holder"></div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3 style="font-size:14px;margin-bottom:12px;">Canadian Bank Account (for CA clients)</h3>
+        <div class="field-row">
+          <div class="field"><label>Bank Name</label><input id="st-bankca-bank"></div>
+          <div class="field"><label>Account Number</label><input id="st-bankca-account"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Transit / Institution No.</label><input id="st-bankca-transit"></div>
+          <div class="field"><label>Account Holder</label><input id="st-bankca-holder"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px;">
+        <h3 style="font-size:14px;margin-bottom:12px;">인보이스 기본 메모 / 세금·목표</h3>
+        <div class="field"><label>한국어 인보이스 기본 메모</label><input id="st-memokr" placeholder="예: 입금 후 회신 부탁드립니다."></div>
+        <div class="field"><label>English invoice default memo</label><input id="st-memoen" placeholder="e.g. Thank you for your business!"></div>
+        <div class="field-row">
+          <div class="field"><label>세금 대비 비율 (%)</label><input type="number" id="st-taxrate" placeholder="10"></div>
+          <div class="field"><label>이번 달 목표 수입 (KRW)</label><input type="number" id="st-goal" placeholder="3000000"></div>
+        </div>
+      </div>
+      <button class="btn dark" id="saveSettingsBtn">설정 저장</button>
+      <div class="card" style="margin-top:18px;">
+        <h3 style="font-size:14px;margin-bottom:10px;">데이터 관리</h3>
+        <div class="toolbar">
+          <button class="btn outline" id="exportCsvBtn">CSV 내보내기 (수입기록)</button>
+          <button class="btn danger" id="resetDataBtn">전체 데이터 초기화</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div class="drawer-overlay" id="wlDrawerOverlay">
+  <div class="drawer-panel" id="wlDrawerPanel"></div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="modalTitle"></h3><button class="modal-close" id="modalCloseBtn">✕</button></div>
+    <div id="modalBody"></div>
+    <button class="btn dark" id="modalSaveBtn" style="width:100%;margin-top:6px;">저장</button>
+  </div>
+</div>
+
+<script>
+/* ================= STATE & STORAGE ================= */
+let clients=[], tasks=[], receipts=[], invoices=[], categories=[], incomes=[], projects=[];
+let settings={ brand:'', email:'', phone:'', defaultCurrency:'KRW',
+  bankKR:{bank:'',account:'',holder:''}, bankCA:{bank:'',account:'',transit:'',holder:''},
+  memoKR:'입금 후 회신 부탁드립니다.', memoEN:'Thank you for your business!', taxRate:10, goal:0 };
+let invoiceCounter=1;
+const SYMS={KRW:'₩',CAD:'$',USD:'$'};
+// two storage keys: CORE (small structured data, saved on almost every action)
+// and RECEIPTS (kept separate because receipt images/base64 can get large — isolating
+// them means a big receipt image can never block saving a task/invoice/project edit).
+const CORE_KEY = 'flowly-core-v3';
+const RECEIPTS_KEY = 'flowly-receipts-v3';
+
+// ---- safe storage helper: retry once with backoff, never throws, never blocks UI ----
+async function storageGet(key){
+  try{
+    const r = await window.storage.get(key);
+    return r ? JSON.parse(r.value) : null;
+  }catch(e){
+    console.error('Storage get failed:', key, e);
+    return null;
+  }
+}
+async function storageSet(key, obj){
+  for(let attempt=0; attempt<2; attempt++){
+    try{
+      await window.storage.set(key, JSON.stringify(obj));
+      return true;
+    }catch(e){
+      console.error('Storage set failed:', key, e, 'attempt', attempt+1);
+      if(attempt===1) return false;
+      await new Promise(r=>setTimeout(r, 500));
+    }
+  }
+  return false;
+}
+async function persistCore(){
+  const ok = await storageSet(CORE_KEY, { clients, tasks, invoices, categories, incomes, projects, settings, invoiceCounter });
+  if(!ok) toast('저장 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.');
+  return ok;
+}
+async function persistReceipts(){
+  const ok = await storageSet(RECEIPTS_KEY, receipts);
+  if(!ok) toast('영수증 저장 중 문제가 발생했어요. 이미지 용량이 너무 크면 줄여서 다시 시도해주세요.');
+  return ok;
+}
+
+function toast(msg){
+  const el=document.createElement('div'); el.className='toast'; el.textContent=msg;
+  document.getElementById('toastWrap').appendChild(el);
+  setTimeout(()=>el.remove(), 2600);
+}
+function fmt(amount, cur){
+  const n=Number(amount)||0;
+  if(cur==='KRW') return SYMS.KRW+Math.round(n).toLocaleString('ko-KR');
+  return (SYMS[cur]||'$')+n.toLocaleString('en-CA',{minimumFractionDigits:0,maximumFractionDigits:2})+' '+cur;
+}
+function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function uid(p){ return p+Date.now()+Math.floor(Math.random()*1000); }
+function clientById(id){ return clients.find(c=>c.id===id); }
+function projectById(id){ return projects.find(p=>p.id===id); }
+function clientColor(name){ const colors=['#C97B4A','#5B7FA6','#8C6BAE','#4F8A6B','#B25C7A','#A07A3C']; let h=0; for(const c of (name||'?')) h=(h*31+c.charCodeAt(0))>>>0; return colors[h%colors.length]; }
+function remaining(t){ if(t.billingModel!=='per_task') return 0; return Math.max(0, Number(t.estimateAmount||0) - Number(t.receivedAmount||0)); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+
+// downscale + recompress an uploaded image before storing — uncompressed phone photos (often 2-8MB)
+// were the most likely cause of "Internal server error" when saving receipts.
+function compressImageFile(file, maxDim=900, quality=0.6){
+  return new Promise((resolve, reject)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let { width, height } = img;
+        if(width > maxDim || height > maxDim){
+          if(width > height){ height = Math.round(height * (maxDim/width)); width = maxDim; }
+          else { width = Math.round(width * (maxDim/height)); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = fr.result;
+    };
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+function billingModelLabel(b){ return {salary:'월급 포함', per_task:'건별 외주', project:'프로젝트 계약'}[b]||b; }
+function sourceTypeLabel(s){ return {salary:'월급', per_task:'건별 외주', project_milestone:'프로젝트 지급', reimbursement:'비용 정산', other:'기타 수입'}[s]||s; }
+
+async function migrateFromV2OrLegacy(){
+  // v2 single-blob version
+  try{
+    const r = await window.storage.get('flowly-data-v2');
+    if(r && r.value){
+      const d = JSON.parse(r.value);
+      return {
+        clients:d.clients||[], tasks:d.tasks||[], receipts:d.receipts||[], invoices:d.invoices||[],
+        categories:d.categories||[], incomes:d.salaryIncomes||[], projects:[], settings:d.settings||settings, invoiceCounter:d.invoiceCounter||1
+      };
+    }
+  }catch(e){ /* not present */ }
+  // even older multi-key version
+  const legacyKeys = ['flowly-clients','flowly-tasks','flowly-receipts','flowly-invoices','flowly-categories','flowly-invoice-counter','flowly-settings'];
+  let found=false; const out={};
+  for(const k of legacyKeys){
+    try{ const r = await window.storage.get(k); if(r && r.value!=null){ out[k]=JSON.parse(r.value); found=true; } }catch(e){}
+  }
+  if(!found) return null;
+  return {
+    clients:out['flowly-clients']||[], tasks:out['flowly-tasks']||[], receipts:out['flowly-receipts']||[],
+    invoices:out['flowly-invoices']||[], categories:out['flowly-categories']||[], incomes:[], projects:[],
+    settings:out['flowly-settings']||settings, invoiceCounter:out['flowly-invoice-counter']||1
+  };
+}
+
+async function loadAll(){
+  let core = await storageGet(CORE_KEY);
+  let migratedReceipts = null;
+
+  if(core === null){
+    const migrated = await migrateFromV2OrLegacy();
+    if(migrated){
+      core = { clients:migrated.clients, tasks:migrated.tasks, invoices:migrated.invoices, categories:migrated.categories,
+        incomes:migrated.incomes, projects:migrated.projects, settings:migrated.settings, invoiceCounter:migrated.invoiceCounter };
+      migratedReceipts = migrated.receipts;
+    }
+  }
+
+  if(core === null){
+    // truly first-ever load: nothing saved anywhere -> inject sample data once
+    clients = [
+      {id:'c_company', name:'회사 재택', companyName:'회사 재택', email:'', phone:'', country:'KR', currency:'KRW', category:'회사 월급', billingModel:'salary', memo:''},
+      {id:'c_gen', name:'GEN', companyName:'GEN', email:'', phone:'', country:'KR', currency:'KRW', category:'GEN', billingModel:'per_task', memo:''},
+      {id:'c_kan', name:'KAN', companyName:'KAN', email:'', phone:'', country:'KR', currency:'KRW', category:'KAN', billingModel:'per_task', memo:''},
+      {id:'c_suldok', name:'SULDOK', companyName:'SULDOK', email:'', phone:'', country:'KR', currency:'KRW', category:'SULDOK', billingModel:'per_task', memo:''},
+      {id:'c_livespeech', name:'LiveSpeech', companyName:'LiveSpeech', email:'', phone:'', country:'CA', currency:'CAD', category:'LiveSpeech', billingModel:'per_task', memo:''},
+      {id:'c_coffeeloft', name:'Coffee Loft', companyName:'Coffee Loft', email:'', phone:'', country:'CA', currency:'CAD', category:'Coffee Loft', billingModel:'per_task', memo:''},
+    ];
+    categories = ['회사 월급','GEN','KAN','SULDOK','LiveSpeech','Coffee Loft','기타 외주'].map(n=>({id:uid('cat'), name:n}));
+    const d=todayStr();
+    tasks = [
+      {id:uid('t'), title:'회사 사이트 리뉴얼 작업', clientId:'c_company', billingModel:'salary', priority:'normal', request:'', date:d, dueDate:d, status:'doing', paymentStatus:'salary', estimateAmount:0, receivedAmount:0, currency:'KRW', workType:'웹사이트', memo:'', createdAt:Date.now()},
+      {id:uid('t'), title:'KAN SNS 카드뉴스', clientId:'c_kan', billingModel:'per_task', priority:'normal', request:'이번 달 카드뉴스 4종', date:d, dueDate:d, status:'todo', paymentStatus:'unbilled', estimateAmount:180000, receivedAmount:0, currency:'KRW', workType:'카드뉴스', memo:'', createdAt:Date.now()},
+      {id:uid('t'), title:'LiveSpeech Logo Revision', clientId:'c_livespeech', billingModel:'per_task', priority:'low', request:'Minor logo tweaks', date:d, dueDate:d, status:'done', paymentStatus:'paid', estimateAmount:150, receivedAmount:150, currency:'CAD', workType:'디자인', memo:'', createdAt:Date.now()},
+      {id:uid('t'), title:'Coffee Loft Poster Design', clientId:'c_coffeeloft', billingModel:'per_task', priority:'urgent', request:'Seasonal poster design', date:d, dueDate:d, status:'doing', paymentStatus:'billed', estimateAmount:220, receivedAmount:0, currency:'CAD', workType:'디자인', memo:'', createdAt:Date.now()},
+    ];
+    projects = [
+      {id:'p_suldok_web', clientId:'c_suldok', categoryId:null, title:'SULDOK 브랜드 웹사이트', description:'브랜드 웹사이트 제작', totalAmount:3000000, currency:'KRW', status:'진행 중', startDate:d, dueDate:d, linkedTaskIds:[], memo:'', createdAt:Date.now(),
+        paymentPlan:[
+          {id:uid('ms'), label:'선금', amount:1000000, dueDate:d, status:'입금완료', invoiceId:null, paidDate:d, memo:''},
+          {id:uid('ms'), label:'중도금', amount:1000000, dueDate:d, status:'미청구', invoiceId:null, paidDate:null, memo:''},
+          {id:uid('ms'), label:'잔금', amount:1000000, dueDate:d, status:'미청구', invoiceId:null, paidDate:null, memo:''},
+        ]}
+    ];
+    incomes = [
+      {id:uid('inc'), sourceType:'salary', categoryId:null, categoryName:'회사 월급', title:'6월 월급', clientId:null, clientName:'', projectId:null, taskId:null, milestoneId:null, amount:2300000, currency:'KRW', date:d, repeat:'monthly', memo:'', createdAt:Date.now()},
+      {id:uid('inc'), sourceType:'per_task', categoryId:null, categoryName:'LiveSpeech', title:'LiveSpeech Logo Revision', clientId:'c_livespeech', clientName:'LiveSpeech', projectId:null, taskId:tasks[2].id, milestoneId:null, amount:150, currency:'CAD', date:d, repeat:'', memo:'', createdAt:Date.now()},
+      {id:uid('inc'), sourceType:'project_milestone', categoryId:null, categoryName:'SULDOK', title:'SULDOK 브랜드 웹사이트 - 선금', clientId:'c_suldok', clientName:'SULDOK', projectId:'p_suldok_web', taskId:null, milestoneId:projects[0].paymentPlan[0].id, amount:1000000, currency:'KRW', date:d, repeat:'', memo:'', createdAt:Date.now()},
+    ];
+    receipts=[]; invoices=[]; invoiceCounter=1;
+    await persistCore(); await persistReceipts();
+  } else {
+    clients = Array.isArray(core.clients) ? core.clients : [];
+    tasks = Array.isArray(core.tasks) ? core.tasks : [];
+    invoices = Array.isArray(core.invoices) ? core.invoices : [];
+    categories = Array.isArray(core.categories) ? core.categories : [];
+    incomes = Array.isArray(core.incomes) ? core.incomes : [];
+    projects = Array.isArray(core.projects) ? core.projects : [];
+    settings = core.settings || settings;
+    invoiceCounter = core.invoiceCounter || 1;
+
+    if(migratedReceipts !== null){
+      receipts = migratedReceipts;
+      await persistReceipts();
+    } else {
+      const r = await storageGet(RECEIPTS_KEY);
+      receipts = Array.isArray(r) ? r : [];
+    }
+    await persistCore(); // write once under the new key so future loads skip migration
+
+    // backfill: convert any old billingType field to the new billingModel scheme
+    clients.forEach(c=>{
+      if(!c.billingModel){ c.billingModel = c.billingType==='salary_included' ? 'salary' : 'per_task'; }
+    });
+    tasks.forEach(t=>{
+      if(!t.billingModel){ t.billingModel = t.billingType==='salary_included' ? 'salary' : 'per_task'; }
+    });
+  }
+  renderAll();
+}
+// every mutation calls one of these two (core vs receipts) — never more than one storage.set per action
+async function saveTasks(){ return persistCore(); }
+async function saveClients(){ return persistCore(); }
+async function saveReceipts(){ return persistReceipts(); }
+async function saveInvoices(){ return persistCore(); }
+async function saveCategories(){ return persistCore(); }
+async function saveSettings(){ return persistCore(); }
+async function saveCounter(){ return persistCore(); }
+async function saveIncomes(){ return persistCore(); }
+async function saveProjects(){ return persistCore(); }
+
+/* ================= NAV ================= */
+document.querySelectorAll('[data-tab]').forEach(el=>{
+  el.onclick=()=>{
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    const navMatch = document.querySelector(`.nav-item[data-tab="${el.dataset.tab}"]`);
+    if(navMatch) navMatch.classList.add('active');
+    document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+    document.getElementById(el.dataset.tab).classList.add('active');
+    renderAll();
+  };
+});
+
+/* ================= GENERIC MODAL ================= */
+function openModal(title, fieldsHtml, onSave){
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = fieldsHtml;
+  document.getElementById('modalOverlay').classList.add('open');
+  const saveBtn = document.getElementById('modalSaveBtn');
+  saveBtn.onclick = onSave;
+}
+function closeModal(){ document.getElementById('modalOverlay').classList.remove('open'); }
+document.getElementById('modalCloseBtn').onclick = closeModal;
+document.getElementById('modalOverlay').addEventListener('click', e=>{ if(e.target.id==='modalOverlay') closeModal(); });
+
+function clientOptions(selectedId){
+  return clients.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${escapeHtml(c.name)} (${c.country})</option>`).join('');
+}
+
+/* ================= TASKS / WORKLOG (shared data) ================= */
+function openTaskModal(existing){
+  const t = existing || {};
+  const initialBillModel = t.billingModel || (clientById(t.clientId)?.billingModel) || 'per_task';
+  const html = `
+    <div class="field"><label>제목 *</label><input id="m-title" value="${escapeHtml(t.title||'')}"></div>
+    <div class="field-row">
+      <div class="field"><label>클라이언트 *</label><select id="m-client">${clientOptions(t.clientId)}</select></div>
+      <div class="field"><label>청구 방식 *</label><select id="m-billmodel">
+        <option value="per_task" ${initialBillModel==='per_task'?'selected':''}>건별 외주</option>
+        <option value="salary" ${initialBillModel==='salary'?'selected':''}>월급 포함</option>
+        <option value="project" ${initialBillModel==='project'?'selected':''}>프로젝트 계약</option>
+      </select></div>
+    </div>
+    <div class="field" id="m-project-row" style="display:none;">
+      <label>연결할 프로젝트 *</label><select id="m-project">${projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${escapeHtml(p.title)} (${escapeHtml(clientById(p.clientId)?.name||'')})</option>`).join('') || '<option value="">등록된 프로젝트가 없어요 — Projects에서 먼저 추가해주세요</option>'}</select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>중요도</label><select id="m-priority">
+        ${['low','normal','high','urgent'].map(p=>`<option value="${p}" ${t.priority===p?'selected':''}>${{low:'낮음',normal:'보통',high:'높음',urgent:'긴급'}[p]}</option>`).join('')}
+      </select></div>
+      <div class="field"><label>작업 종류</label><select id="m-worktype">
+        ${['디자인','UXUI','배너','카드뉴스','웹사이트','인쇄물','SNS콘텐츠','기타'].map(w=>`<option ${t.workType===w?'selected':''}>${w}</option>`).join('')}
+      </select></div>
+    </div>
+    <div class="field"><label>요청사항</label><textarea id="m-request" rows="2">${escapeHtml(t.request||'')}</textarea></div>
+    <div class="field-row">
+      <div class="field"><label>작업일</label><input type="date" id="m-date" value="${t.date||todayStr()}"></div>
+      <div class="field"><label>마감일 *</label><input type="date" id="m-due" value="${t.dueDate||todayStr()}"></div>
+    </div>
+    <div class="field"><label>업무 상태</label><select id="m-status">
+      ${['todo','doing','done'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${{todo:'할 일',doing:'진행 중',done:'완료'}[s]}</option>`).join('')}
+    </select></div>
+
+    <div id="m-billable-fields">
+      <div class="field-row">
+        <div class="field"><label id="m-est-label">견적 금액 *</label><input type="number" id="m-est" value="${t.estimateAmount||''}"></div>
+        <div class="field"><label>통화</label><select id="m-currency">
+          ${['KRW','CAD','USD'].map(c=>`<option ${t.currency===c?'selected':''}>${c}</option>`).join('')}
+        </select></div>
+      </div>
+      <div class="field-row" id="m-pay-row">
+        <div class="field"><label>결제 상태</label><select id="m-pay">
+          ${['unbilled','billed','partial','paid'].map(p=>`<option value="${p}" ${t.paymentStatus===p?'selected':''}>${{unbilled:'미청구',billed:'청구완료',partial:'부분입금',paid:'입금완료'}[p]}</option>`).join('')}
+        </select></div>
+        <div class="field"><label>받은 금액</label><input type="number" id="m-received" value="${t.receivedAmount||0}"></div>
+      </div>
+    </div>
+    <div id="m-salary-note" style="display:none;font-size:12px;color:var(--ink-soft);background:var(--panel2);border-radius:9px;padding:10px 12px;margin-bottom:12px;">
+      월급에 포함된 업무예요. 건별로 청구하거나 입금 처리하지 않아요. 월급 자체는 <b>수입기록 → + 수입 추가</b>에서 따로 등록해주세요.
+    </div>
+    <div id="m-project-note" style="display:none;font-size:12px;color:var(--ink-soft);background:var(--panel2);border-radius:9px;padding:10px 12px;margin-bottom:12px;">
+      프로젝트에 연결된 업무예요. 이 업무 자체는 수입으로 바로 반영되지 않고, <b>Projects → 결제 단계</b>가 입금완료될 때 수입기록에 반영돼요.
+    </div>
+
+    <div class="field"><label>메모</label><input id="m-memo" value="${escapeHtml(t.memo||'')}"></div>
+  `;
+  openModal(existing? '할 일 수정' : '할 일 추가', html, async ()=>{
+    const title=document.getElementById('m-title').value.trim();
+    const clientId=document.getElementById('m-client').value;
+    const due=document.getElementById('m-due').value;
+    const billingModel=document.getElementById('m-billmodel').value;
+    const estRaw=document.getElementById('m-est').value;
+    const est=parseFloat(estRaw);
+    if(!title || !clientId || !due){ toast('필수 항목을 입력해주세요.'); return; }
+    if(billingModel==='per_task' && (!estRaw || isNaN(est))){ toast('건별 외주 업무는 견적 금액을 입력해주세요.'); return; }
+    const projectId = billingModel==='project' ? document.getElementById('m-project').value : null;
+    if(billingModel==='project' && !projectId){ toast('연결할 프로젝트를 선택해주세요.'); return; }
+    const data = {
+      title, clientId, billingModel, projectId,
+      priority:document.getElementById('m-priority').value,
+      request:document.getElementById('m-request').value.trim(),
+      date:document.getElementById('m-date').value||todayStr(), dueDate:due,
+      status:document.getElementById('m-status').value, workType:document.getElementById('m-worktype').value,
+      memo:document.getElementById('m-memo').value.trim()
+    };
+    if(billingModel==='salary'){
+      data.estimateAmount = est || 0; data.currency = document.getElementById('m-currency').value;
+      data.receivedAmount = 0; data.paymentStatus = 'salary';
+    } else if(billingModel==='project'){
+      data.estimateAmount = est || 0; data.currency = document.getElementById('m-currency').value;
+      data.receivedAmount = 0; data.paymentStatus = 'project';
+    } else {
+      data.estimateAmount = est; data.currency = document.getElementById('m-currency').value;
+      data.paymentStatus = document.getElementById('m-pay').value;
+      data.receivedAmount = parseFloat(document.getElementById('m-received').value)||0;
+    }
+    if(existing){ Object.assign(existing, data); toast('수정되었습니다.'); }
+    else{ tasks.push({id:uid('t'), createdAt:Date.now(), ...data}); toast('할 일이 추가되었습니다. 업무기록에도 연결되었습니다.'); }
+    await saveTasks();
+    if(billingModel==='per_task'){
+      const savedTask = existing || tasks[tasks.length-1];
+      await syncIncomeForTask(savedTask);
+    }
+    closeModal(); renderAll();
+  });
+
+  function toggleBillingFields(){
+    const v = document.getElementById('m-billmodel').value;
+    document.getElementById('m-pay-row').style.display = v==='per_task' ? '' : 'none';
+    document.getElementById('m-salary-note').style.display = v==='salary' ? 'block' : 'none';
+    document.getElementById('m-project-note').style.display = v==='project' ? 'block' : 'none';
+    document.getElementById('m-project-row').style.display = v==='project' ? '' : 'none';
+    document.getElementById('m-est-label').textContent = v==='per_task' ? '견적 금액 *' : '견적 금액 (선택)';
+  }
+  toggleBillingFields();
+  document.getElementById('m-billmodel').onchange = toggleBillingFields;
+  if(!existing){
+    document.getElementById('m-client').onchange = (e)=>{
+      const c = clientById(e.target.value);
+      if(c && c.billingModel && c.billingModel!=='project'){ document.getElementById('m-billmodel').value = c.billingModel; toggleBillingFields(); }
+      if(c && c.currency){ document.getElementById('m-currency').value = c.currency; }
+    };
+  }
+}
+document.getElementById('addTaskBtn').onclick = ()=>openTaskModal(null);
+document.getElementById('addWorklogBtn').onclick = ()=>openTaskModal(null);
+
+function priorityLabel(p){ return {low:'낮음',normal:'보통',high:'높음',urgent:'긴급'}[p]||p; }
+function statusLabel(s){ return {todo:'할 일',doing:'진행 중',done:'완료'}[s]||s; }
+function payLabel(p){ return {unbilled:'미청구',billed:'청구완료',partial:'부분입금',paid:'입금완료',salary:'월급 포함',project:'프로젝트 연결'}[p]||p; }
+
+// keeps a single Income entry in sync with a per_task task's paid amount (creates/updates/removes as needed)
+async function syncIncomeForTask(t){
+  const existingIncome = incomes.find(x=>x.taskId===t.id);
+  const shouldHaveIncome = t.billingModel==='per_task' && Number(t.receivedAmount)>0;
+  if(shouldHaveIncome){
+    const c = clientById(t.clientId);
+    if(existingIncome){
+      existingIncome.amount = t.receivedAmount; existingIncome.currency = t.currency; existingIncome.date = t.date;
+    } else {
+      incomes.push({ id:uid('inc'), sourceType:'per_task', categoryId:null, categoryName:c?c.category:'', title:t.title,
+        clientId:t.clientId, clientName:c?c.name:'', projectId:null, taskId:t.id, milestoneId:null,
+        amount:t.receivedAmount, currency:t.currency, date:t.date||todayStr(), repeat:'', memo:'', createdAt:Date.now() });
+    }
+  } else if(existingIncome){
+    incomes = incomes.filter(x=>x.id!==existingIncome.id);
+  }
+  await saveIncomes();
+}
+
+// keeps an Income entry in sync with a project payment milestone's status
+async function syncIncomeForMilestone(ms, project){
+  const existingIncome = incomes.find(x=>x.milestoneId===ms.id);
+  if(ms.status==='입금완료'){
+    const c = clientById(project.clientId);
+    if(existingIncome){
+      existingIncome.amount = ms.amount; existingIncome.currency = project.currency; existingIncome.date = ms.paidDate||todayStr();
+    } else {
+      incomes.push({ id:uid('inc'), sourceType:'project_milestone', categoryId:null, categoryName:c?c.category:'',
+        title:`${project.title} - ${ms.label}`, clientId:project.clientId, clientName:c?c.name:'',
+        projectId:project.id, taskId:null, milestoneId:ms.id, amount:ms.amount, currency:project.currency,
+        date:ms.paidDate||todayStr(), repeat:'', memo:'', createdAt:Date.now() });
+    }
+  } else if(existingIncome){
+    incomes = incomes.filter(x=>x.id!==existingIncome.id);
+  }
+  await saveIncomes();
+}
+
+async function deleteTask(id){
+  if(!confirm('이 항목을 삭제할까요?')) return;
+  tasks = tasks.filter(t=>t.id!==id);
+  incomes = incomes.filter(x=>x.taskId!==id); // remove any income entry generated from this task
+  await saveTasks(); await saveIncomes();
+  toast('삭제되었습니다.'); renderAll();
+}
+async function setTaskStatus(id, status){ const t=tasks.find(x=>x.id===id); t.status=status; await saveTasks(); renderAll(); }
+async function setTaskPay(id, pay){
+  const t=tasks.find(x=>x.id===id);
+  t.paymentStatus=pay;
+  if(pay==='paid' && t.receivedAmount < t.estimateAmount) t.receivedAmount = t.estimateAmount;
+  await saveTasks();
+  await syncIncomeForTask(t);
+  if(pay==='paid') toast('입금완료 처리되어 수입기록에 반영되었습니다.');
+  renderAll();
+}
+
+function renderTaskList(){
+  const statusF = document.getElementById('taskFilterStatus').value;
+  const urgentF = document.getElementById('taskFilterUrgent').value;
+  const sortF = document.getElementById('taskSort').value;
+  let list = tasks.slice();
+  if(statusF) list = list.filter(t=>t.status===statusF);
+  if(urgentF==='urgent') list = list.filter(t=>t.priority==='urgent');
+  if(urgentF==='unpaid') list = list.filter(t=>remaining(t)>0);
+  if(sortF==='recent') list.sort((a,b)=>b.createdAt-a.createdAt);
+  if(sortF==='old') list.sort((a,b)=>a.createdAt-b.createdAt);
+  if(sortF==='amountHigh') list.sort((a,b)=>b.estimateAmount-a.estimateAmount);
+  if(sortF==='amountLow') list.sort((a,b)=>a.estimateAmount-b.estimateAmount);
+  if(sortF==='due') list.sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||''));
+  if(sortF==='priority'){ const order={urgent:0,high:1,normal:2,low:3}; list.sort((a,b)=>order[a.priority]-order[b.priority]); }
+
+  const wrap = document.getElementById('taskListWrap');
+  if(!list.length){ wrap.innerHTML='<div class="empty">할 일이 없어요.</div>'; return; }
+  const isDueSoon = d => d && (new Date(d) - new Date(todayStr())) <= 86400000*2 && (new Date(d) - new Date(todayStr())) >= -86400000*365;
+  wrap.innerHTML = `<table><thead><tr><th>제목</th><th>클라이언트</th><th>중요도</th><th>마감일</th><th>상태</th><th>결제상태</th><th class="right">견적</th><th></th></tr></thead><tbody>
+  ${list.map(t=>{
+    const c = clientById(t.clientId);
+    return `<tr data-id="${t.id}">
+      <td><b>${escapeHtml(t.title)}</b>${t.memo?`<div style="color:var(--ink-soft);font-size:11px;">${escapeHtml(t.memo)}</div>`:''}</td>
+      <td>${c?escapeHtml(c.name):'-'}</td>
+      <td><span class="badge ${t.priority}">${priorityLabel(t.priority)}</span></td>
+      <td style="${isDueSoon(t.dueDate)&&t.status!=='done'?'color:var(--bad);font-weight:600;':''}">${t.dueDate||'-'}</td>
+      <td><select class="chip statusSel" style="padding:4px 8px;font-size:11px;">
+        ${['todo','doing','done'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${statusLabel(s)}</option>`).join('')}
+      </select></td>
+      <td>${t.billingModel==='salary'
+        ? `<span class="badge salary">월급 포함</span>`
+        : t.billingModel==='project'
+        ? `<span class="badge salary">프로젝트 연결</span>`
+        : `<select class="chip paySel" style="padding:4px 8px;font-size:11px;">${['unbilled','billed','partial','paid'].map(p=>`<option value="${p}" ${t.paymentStatus===p?'selected':''}>${payLabel(p)}</option>`).join('')}</select>`
+      }</td>
+      <td class="right">${fmt(t.estimateAmount, t.currency)}${remaining(t)>0?`<div style="color:var(--bad);font-size:10.5px;">미수 ${fmt(remaining(t),t.currency)}</div>`:''}</td>
+      <td class="row-flex"><button class="iconbtn-sm editBtn">수정</button><button class="iconbtn-sm delBtn" style="color:var(--bad)">삭제</button></td>
+    </tr>`;
+  }).join('')}</tbody></table>`;
+  wrap.querySelectorAll('tr').forEach(row=>{
+    const id=row.dataset.id; if(!id) return;
+    const t = tasks.find(x=>x.id===id);
+    row.querySelector('.statusSel').onchange = e=>setTaskStatus(id, e.target.value);
+    const paySel = row.querySelector('.paySel');
+    if(paySel) paySel.onchange = e=>setTaskPay(id, e.target.value);
+    row.querySelector('.editBtn').onclick = ()=>openTaskModal(t);
+    row.querySelector('.delBtn').onclick = ()=>deleteTask(id);
+  });
+}
+
+function renderWorklog(){
+  const clientSel = document.getElementById('wlFilterClient');
+  const prevC = clientSel.value;
+  clientSel.innerHTML = '<option value="">전체 클라이언트</option>' + clients.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  clientSel.value = prevC;
+  const payF = document.getElementById('wlFilterPay').value;
+  let list = tasks.slice();
+  if(clientSel.value) list = list.filter(t=>t.clientId===clientSel.value);
+  if(payF) list = list.filter(t=>t.paymentStatus===payF);
+  list.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  clientSel.onchange = renderWorklog;
+  document.getElementById('wlFilterPay').onchange = renderWorklog;
+
+  const wrap = document.getElementById('worklogWrap');
+  if(!list.length){ wrap.innerHTML='<div class="empty">기록이 없어요.</div>'; return; }
+  wrap.innerHTML = `
+    <div class="wl-head">
+      <div>날짜</div><div>클라이언트</div><div>업무</div><div>작업종류</div><div class="cell-num">견적</div><div class="cell-num">받은금액</div><div>결제상태</div><div></div>
+    </div>
+    ${list.map(t=>{
+      const c=clientById(t.clientId);
+      return `<div class="wl-row" data-id="${t.id}">
+        <div>${t.date}</div>
+        <div>${c?escapeHtml(c.name):'-'}<div style="color:var(--ink-soft);font-size:10.5px;">${c?c.country:''}</div></div>
+        <div class="cell-title">${escapeHtml(t.title)}</div>
+        <div>${escapeHtml(t.workType||'-')}</div>
+        <div class="cell-num">${fmt(t.estimateAmount,t.currency)}</div>
+        <div class="cell-num">${fmt(t.receivedAmount,t.currency)}</div>
+        <div><span class="badge ${t.paymentStatus}">${payLabel(t.paymentStatus)}</span></div>
+        <div class="actions-cell">
+          <button class="iconbtn-sm editBtn">수정</button>
+          <button class="iconbtn-sm delBtn" style="color:var(--bad)">삭제</button>
+        </div>
+      </div>`;
+    }).join('')}`;
+  wrap.querySelectorAll('.wl-row').forEach(row=>{
+    const id=row.dataset.id;
+    const t=tasks.find(x=>x.id===id);
+    row.querySelector('.editBtn').onclick = (e)=>{ e.stopPropagation(); openTaskModal(t); };
+    row.querySelector('.delBtn').onclick = (e)=>{ e.stopPropagation(); deleteTask(id); };
+    row.onclick = ()=>openWorklogDetail(id);
+  });
+}
+
+/* ---- Work Log detail drawer ---- */
+function openWorklogDetail(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  const c = clientById(t.clientId);
+  const linkedInvoices = invoices.filter(inv=>inv.items.some(it=>it.kind==='task' && it.refId===t.id));
+  const linkedReceipts = receipts.filter(r=>r.linkedTaskId===t.id);
+  document.getElementById('wlDrawerPanel').innerHTML = `
+    <div class="drawer-head">
+      <div><h3>${escapeHtml(t.title)}</h3><div style="color:var(--ink-soft);font-size:12px;margin-top:3px;">${c?escapeHtml(c.name):'-'} · ${c?(c.country==='KR'?'🇰🇷 한국':'🇨🇦 Canada'):''}</div></div>
+      <button class="modal-close" id="wlDrawerCloseBtn">✕</button>
+    </div>
+
+    <div class="drawer-section">
+      <h4>기본 정보</h4>
+      <div class="drawer-row"><span class="lbl">작업종류</span><span>${escapeHtml(t.workType||'-')}</span></div>
+      <div class="drawer-row"><span class="lbl">날짜</span><span>${t.date||'-'}</span></div>
+      <div class="drawer-row"><span class="lbl">마감일</span><span>${t.dueDate||'-'}</span></div>
+      <div class="drawer-row"><span class="lbl">중요도</span><span class="badge ${t.priority}">${priorityLabel(t.priority)}</span></div>
+      <div class="drawer-row"><span class="lbl">업무 상태</span><span class="badge ${t.status}">${statusLabel(t.status)}</span></div>
+      <div class="drawer-row"><span class="lbl">결제 상태</span><span class="badge ${t.paymentStatus}">${payLabel(t.paymentStatus)}</span></div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>금액 정보</h4>
+      <div class="drawer-row"><span class="lbl">견적 금액</span><span>${fmt(t.estimateAmount,t.currency)}</span></div>
+      <div class="drawer-row"><span class="lbl">받은 금액</span><span>${fmt(t.receivedAmount,t.currency)}</span></div>
+      <div class="drawer-row"><span class="lbl">미수금</span><span style="color:${remaining(t)>0?'var(--bad)':'inherit'}">${fmt(remaining(t),t.currency)}</span></div>
+      <div class="drawer-row"><span class="lbl">입금완료 여부</span><span>${t.paymentStatus==='paid'?'완료':'미완료'}</span></div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>업무 내용</h4>
+      <div class="drawer-row"><span class="lbl">요청사항</span><span style="text-align:right;max-width:60%;">${escapeHtml(t.request||'-')}</span></div>
+      <div class="drawer-row"><span class="lbl">메모</span><span style="text-align:right;max-width:60%;">${escapeHtml(t.memo||'-')}</span></div>
+    </div>
+
+    <div class="drawer-section">
+      <h4>연결 정보</h4>
+      <div class="drawer-row"><span class="lbl">연결된 인보이스</span><span>${linkedInvoices.length? linkedInvoices.map(i=>escapeHtml(i.number)).join(', ') : '없음'}</span></div>
+      <div class="drawer-row"><span class="lbl">연결된 영수증</span><span>${linkedReceipts.length} 건</span></div>
+      <div class="drawer-row"><span class="lbl">수입기록 반영</span><span>${t.paymentStatus==='paid' && Number(t.receivedAmount)>0 ? '반영됨' : '미반영'}</span></div>
+    </div>
+
+    <div class="drawer-actions">
+      <button class="btn light" id="wlDrawerEditBtn">수정</button>
+      <button class="btn danger" id="wlDrawerDelBtn">삭제</button>
+      <button class="btn light" id="wlDrawerInvoiceBtn">인보이스 생성</button>
+      ${t.paymentStatus!=='paid' ? `<button class="btn dark" id="wlDrawerPaidBtn">입금완료 처리</button>` : ''}
+    </div>
+  `;
+  document.getElementById('wlDrawerOverlay').classList.add('open');
+  document.getElementById('wlDrawerCloseBtn').onclick = closeWorklogDetail;
+  document.getElementById('wlDrawerEditBtn').onclick = ()=>{ closeWorklogDetail(); openTaskModal(t); };
+  document.getElementById('wlDrawerDelBtn').onclick = async ()=>{ await deleteTask(id); closeWorklogDetail(); };
+  document.getElementById('wlDrawerInvoiceBtn').onclick = ()=>{
+    closeWorklogDetail();
+    document.querySelector('.nav-item[data-tab="invoices"]').click();
+    document.getElementById('inv-client').value = t.clientId;
+    updateLangPreview();
+    document.getElementById('loadUnpaidBtn').click();
+  };
+  const paidBtn = document.getElementById('wlDrawerPaidBtn');
+  if(paidBtn) paidBtn.onclick = async ()=>{ await setTaskPay(id, 'paid'); closeWorklogDetail(); };
+}
+function closeWorklogDetail(){ document.getElementById('wlDrawerOverlay').classList.remove('open'); }
+document.getElementById('wlDrawerOverlay').addEventListener('click', e=>{ if(e.target.id==='wlDrawerOverlay') closeWorklogDetail(); });
+
+/* ================= INCOME ================= */
+let incomeCatFilter='';
+let incomeTypeFilter = '';
+function renderIncome(){
+  const monthKey = todayStr().slice(0,7);
+  const yearKey = todayStr().slice(0,4);
+  const sumKRW = list => list.reduce((s,x)=> s + (x.currency==='KRW'? Number(x.amount||0):0), 0);
+
+  const thisMonth = incomes.filter(x=>(x.date||'').slice(0,7)===monthKey);
+  const thisYear = incomes.filter(x=>(x.date||'').slice(0,4)===yearKey);
+
+  document.getElementById('incomeTopStats').innerHTML = [
+    ['이번 달 총 수입', fmt(sumKRW(thisMonth),'KRW')],
+    ['올해 총 수입', fmt(sumKRW(thisYear),'KRW')],
+  ].map(([l,v])=>`<div class="card"><div class="stat-label">${l}</div><div class="stat-value">${v}</div></div>`).join('');
+
+  const salaryThisMonth = sumKRW(thisMonth.filter(x=>x.sourceType==='salary'));
+  const perTaskThisMonth = sumKRW(thisMonth.filter(x=>x.sourceType==='per_task'));
+  const milestoneThisMonth = sumKRW(thisMonth.filter(x=>x.sourceType==='project_milestone'));
+  document.getElementById('incomeBreakdown').innerHTML = [
+    ['월급', salaryThisMonth], ['건별 외주', perTaskThisMonth], ['프로젝트 지급', milestoneThisMonth],
+  ].map(([l,v])=>`<div class="card"><div class="stat-label">${l}</div><div class="stat-value" style="font-size:17px;">${fmt(v,'KRW')}</div></div>`).join('');
+
+  const tabsWrap = document.getElementById('incomeTypeTabs');
+  tabsWrap.style.gap = '18px';
+  const types = [['','전체'],['salary','월급'],['per_task','건별 외주'],['project_milestone','프로젝트 지급'],['reimbursement','비용 정산'],['other','기타 수입']];
+  tabsWrap.innerHTML = types.map(([val,label])=>
+    `<div style="cursor:pointer;font-size:13px;${incomeTypeFilter===val?'color:#13151A;font-weight:700;':'color:#B0B5BD;font-weight:500;'}" data-type="${val}">${label}</div>`
+  ).join('');
+  tabsWrap.querySelectorAll('[data-type]').forEach(el=>{ el.onclick=()=>{ incomeTypeFilter=el.dataset.type; renderIncome(); }; });
+
+  let listAll = incomes.slice();
+  if(incomeTypeFilter) listAll = listAll.filter(x=>x.sourceType===incomeTypeFilter);
+  listAll.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const wrap = document.getElementById('incomeTableWrap');
+  if(!listAll.length){ wrap.innerHTML='<div class="empty">조건에 맞는 수입 기록이 없어요.</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr><th>날짜</th><th>유형</th><th>제목</th><th>클라이언트</th><th class="right">금액</th><th>메모</th><th></th></tr></thead><tbody>
+  ${listAll.map(x=>`<tr data-id="${x.id}">
+      <td>${x.date}</td>
+      <td><span class="badge ${x.sourceType==='salary'?'salary':'paid'}">${sourceTypeLabel(x.sourceType)}</span></td>
+      <td>${escapeHtml(x.title)}</td><td>${escapeHtml(x.clientName||'-')}</td>
+      <td class="right">${fmt(x.amount,x.currency)}</td><td>${escapeHtml(x.memo||'-')}</td>
+      <td class="row-flex">${x.taskId||x.milestoneId? '<span style="color:var(--ink-soft);font-size:11px;">자동반영</span>' : `<button class="iconbtn-sm incomeDelBtn" style="color:var(--bad)">삭제</button>`}</td>
+    </tr>`).join('')}</tbody></table>`;
+  wrap.querySelectorAll('.incomeDelBtn').forEach(btn=>{
+    btn.onclick = async ()=>{
+      if(!confirm('이 수입 기록을 삭제할까요?')) return;
+      const id = btn.closest('tr').dataset.id;
+      incomes = incomes.filter(x=>x.id!==id);
+      await saveIncomes();
+      toast('삭제되었습니다.');
+      renderIncome();
+    };
+  });
+}
+
+document.getElementById('addIncomeBtn').onclick = ()=>{
+  const html = `
+    <div class="field"><label>수입 유형 *</label><select id="m-inc-type">
+      <option value="salary">월급</option>
+      <option value="reimbursement">비용 정산</option>
+      <option value="other">기타 수입</option>
+    </select></div>
+    <div class="field-row">
+      <div class="field"><label>카테고리</label><select id="m-inc-cat">${categories.map(c=>`<option>${escapeHtml(c.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>제목 *</label><input id="m-inc-title" placeholder="예: 6월 월급"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>금액 *</label><input type="number" id="m-inc-amount" placeholder="0"></div>
+      <div class="field"><label>통화</label><select id="m-inc-currency"><option value="KRW">KRW</option><option value="CAD">CAD</option><option value="USD">USD</option></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>날짜 *</label><input type="date" id="m-inc-date" value="${todayStr()}"></div>
+      <div class="field"><label>반복</label><select id="m-inc-repeat"><option value="">반복 없음</option><option value="monthly">매월 반복</option></select></div>
+    </div>
+    <div class="field"><label>메모</label><input id="m-inc-memo"></div>
+  `;
+  openModal('수입 추가', html, async ()=>{
+    const title = document.getElementById('m-inc-title').value.trim();
+    const amount = parseFloat(document.getElementById('m-inc-amount').value);
+    const date = document.getElementById('m-inc-date').value;
+    if(!title || !amount || !date){ toast('필수 항목을 입력해주세요.'); return; }
+    incomes.push({
+      id:uid('inc'), sourceType:document.getElementById('m-inc-type').value,
+      categoryId:null, categoryName:document.getElementById('m-inc-cat').value,
+      title, clientId:null, clientName:'', projectId:null, taskId:null, milestoneId:null,
+      amount, currency:document.getElementById('m-inc-currency').value, date,
+      repeat:document.getElementById('m-inc-repeat').value, memo:document.getElementById('m-inc-memo').value.trim(),
+      createdAt:Date.now()
+    });
+    await saveIncomes();
+    toast('수입이 등록되었습니다.');
+    closeModal();
+    renderIncome();
+  });
+};
+
+document.getElementById('manageCategoriesBtn').onclick = ()=>{
+  function render(){
+    return `<div id="catList">${categories.map(c=>`
+      <div class="row-flex" style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line);" data-id="${c.id}">
+        <input class="catNameInput" value="${escapeHtml(c.name)}" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-family:inherit;font-size:13px;background:var(--panel2);height:36px;box-sizing:border-box;">
+        <button class="iconbtn-sm catDelBtn" style="color:var(--bad);flex:none;padding:4px 8px;">삭제</button>
+      </div>`).join('')}</div>
+      <button class="btn light" id="catAddBtn" style="width:100%;margin-top:6px;">+ 카테고리 추가</button>`;
+  }
+  openModal('카테고리 관리', render(), async ()=>{
+    document.querySelectorAll('#catList [data-id]').forEach(row=>{
+      const id=row.dataset.id; const cat=categories.find(c=>c.id===id);
+      if(cat) cat.name = row.querySelector('.catNameInput').value.trim() || cat.name;
+    });
+    await saveCategories(); toast('카테고리가 저장되었습니다.'); closeModal(); renderAll();
+  });
+  document.getElementById('catAddBtn').onclick = async ()=>{
+    categories.push({id:uid('cat'), name:'새 카테고리'});
+    await saveCategories();
+    document.getElementById('modalBody').innerHTML = render();
+    bindCatModalEvents();
+  };
+  function bindCatModalEvents(){
+    document.getElementById('catAddBtn').onclick = async ()=>{
+      categories.push({id:uid('cat'), name:'새 카테고리'});
+      await saveCategories();
+      document.getElementById('modalBody').innerHTML = render();
+      bindCatModalEvents();
+    };
+    document.querySelectorAll('.catDelBtn').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const id = btn.closest('[data-id]').dataset.id;
+        if(!confirm('이 카테고리를 삭제할까요?')) return;
+        categories = categories.filter(c=>c.id!==id);
+        await saveCategories();
+        document.getElementById('modalBody').innerHTML = render();
+        bindCatModalEvents();
+      };
+    });
+  }
+  bindCatModalEvents();
+};
+
+/* ================= INVOICES (KR/EN bilingual) ================= */
+let currentInvoiceItems = []; // {kind:'task'|'receipt'|'manual', refId, title, qty, unitPrice, amount}
+let editingInvoiceId = null;
+
+function invoiceLangFor(client){
+  return client && client.country==='CA' ? 'EN' : 'KR';
+}
+const LABELS = {
+  KR:{ invoice:'인보이스', number:'인보이스 번호', issue:'발행일', due:'입금 기한', from:'공급자', billTo:'청구 대상',
+       item:'항목', desc:'설명', qty:'수량', price:'단가', amount:'합계', subtotal:'소계', expenses:'비용', total:'총액',
+       memo:'메모', bank:'입금 계좌' },
+  EN:{ invoice:'INVOICE', number:'Invoice Number', issue:'Issue Date', due:'Due Date', from:'From', billTo:'Bill To',
+       item:'Item', desc:'Description', qty:'Qty', price:'Unit Price', amount:'Amount', subtotal:'Subtotal', expenses:'Expenses', total:'Total',
+       memo:'Memo', bank:'Bank Info' }
+};
+function fmtDate(d, lang){
+  if(!d) return '-';
+  if(lang==='KR') return d.replaceAll('-','.');
+  const dt=new Date(d); return dt.toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
+}
+
+function renderInvoiceClientSelect(){
+  const sel=document.getElementById('inv-client');
+  const prev=sel.value;
+  sel.innerHTML = clients.map(c=>`<option value="${c.id}">${escapeHtml(c.name)} (${c.country})</option>`).join('');
+  if(clients.find(c=>c.id===prev)) sel.value=prev;
+  updateLangPreview();
+  document.getElementById('inv-issue').value = document.getElementById('inv-issue').value || todayStr();
+  const d=new Date(); d.setDate(d.getDate()+14);
+  document.getElementById('inv-due').value = document.getElementById('inv-due').value || d.toISOString().slice(0,10);
+}
+function updateLangPreview(){
+  const c = clientById(document.getElementById('inv-client').value);
+  const lang = invoiceLangFor(c);
+  document.getElementById('inv-lang-preview').value = c? `${lang==='KR'?'한국어':'English'} · ${c.currency} · ${lang==='KR'?'한국 계좌':'Canadian Bank'}` : '';
+}
+document.getElementById('inv-client').onchange = updateLangPreview;
+
+document.getElementById('loadUnpaidBtn').onclick = ()=>{
+  const cid = document.getElementById('inv-client').value;
+  const list = tasks.filter(t=>t.clientId===cid && t.billingModel==='per_task' && t.paymentStatus!=='paid' && remaining(t)>0);
+  if(!list.length){ toast('이 클라이언트의 미수금 항목이 없어요.'); return; }
+  list.forEach(t=>{
+    if(currentInvoiceItems.some(i=>i.refId===t.id)) return;
+    currentInvoiceItems.push({kind:'task', refId:t.id, title:t.title, qty:1, unitPrice:remaining(t), currency:t.currency, amount:remaining(t)});
+  });
+  renderInvoiceItems();
+};
+document.getElementById('loadMilestoneBtn').onclick = ()=>{
+  const cid = document.getElementById('inv-client').value;
+  const clientProjects = projects.filter(p=>p.clientId===cid);
+  const list = [];
+  clientProjects.forEach(p=>{
+    (p.paymentPlan||[]).forEach(ms=>{
+      if(ms.status!=='입금완료') list.push({ms, p});
+    });
+  });
+  if(!list.length){ toast('이 클라이언트의 프로젝트 결제 단계가 없어요.'); return; }
+  list.forEach(({ms,p})=>{
+    if(currentInvoiceItems.some(i=>i.refId===ms.id)) return;
+    currentInvoiceItems.push({kind:'milestone', refId:ms.id, projectId:p.id, title:`${p.title} - ${ms.label}`, qty:1, unitPrice:ms.amount, currency:p.currency, amount:ms.amount});
+  });
+  renderInvoiceItems();
+};
+document.getElementById('loadExpenseBtn').onclick = ()=>{
+  const cid = document.getElementById('inv-client').value;
+  const list = receipts.filter(r=>r.clientId===cid && r.billingStatus==='toBill');
+  if(!list.length){ toast('청구 가능한 비용이 없어요.'); return; }
+  list.forEach(r=>{
+    if(currentInvoiceItems.some(i=>i.refId===r.id)) return;
+    currentInvoiceItems.push({kind:'receipt', refId:r.id, title:(r.vendor||'비용')+' 비용', qty:1, unitPrice:r.amount, currency:r.currency, amount:r.amount});
+  });
+  renderInvoiceItems();
+};
+document.getElementById('addManualItemBtn').onclick = ()=>{
+  currentInvoiceItems.push({kind:'manual', refId:null, title:'새 항목', qty:1, unitPrice:0, currency:clientById(document.getElementById('inv-client').value)?.currency||'KRW', amount:0});
+  renderInvoiceItems();
+};
+function renderInvoiceItems(){
+  const wrap = document.getElementById('invItemsWrap');
+  if(!currentInvoiceItems.length){ wrap.innerHTML='<div class="empty">항목을 불러오거나 추가하세요.</div>'; }
+  else{
+    wrap.innerHTML = currentInvoiceItems.map((it,i)=>`
+      <div class="row-flex" style="margin-bottom:8px;" data-i="${i}">
+        <input class="itemTitle" value="${escapeHtml(it.title)}" style="flex:2;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-family:inherit;font-size:12.5px;background:var(--panel2);height:36px;box-sizing:border-box;">
+        <input class="itemQty" type="number" inputmode="decimal" value="${it.qty}" style="width:55px;border:1px solid var(--line);border-radius:9px;padding:8px;font-family:inherit;font-size:12.5px;background:var(--panel2);height:36px;box-sizing:border-box;">
+        <input class="itemPrice" type="number" inputmode="decimal" value="${it.unitPrice}" style="width:110px;border:1px solid var(--line);border-radius:9px;padding:8px;font-family:inherit;font-size:12.5px;background:var(--panel2);height:36px;box-sizing:border-box;">
+        <div class="itemAmount" style="width:100px;text-align:right;font-size:12.5px;">${fmt((Number(it.qty)||0)*(Number(it.unitPrice)||0), it.currency)}</div>
+        <button class="iconbtn-sm itemDel" style="color:var(--bad)">✕</button>
+      </div>`).join('');
+    wrap.querySelectorAll('[data-i]').forEach(row=>{
+      const i = Number(row.dataset.i);
+      const updateRowTotal = ()=>{
+        const it = currentInvoiceItems[i];
+        row.querySelector('.itemAmount').textContent = fmt((it.qty||0)*(it.unitPrice||0), it.currency);
+        updateRunningTotal();
+      };
+      row.querySelector('.itemTitle').oninput = e=>{ currentInvoiceItems[i].title=e.target.value; };
+      row.querySelector('.itemQty').oninput = e=>{
+        const v = e.target.value;
+        currentInvoiceItems[i].qty = v===''? '' : parseFloat(v);
+        updateRowTotal();
+      };
+      row.querySelector('.itemQty').onblur = e=>{ if(e.target.value==='' || isNaN(currentInvoiceItems[i].qty)){ currentInvoiceItems[i].qty=0; e.target.value=0; } updateRowTotal(); };
+      row.querySelector('.itemPrice').oninput = e=>{
+        const v = e.target.value;
+        currentInvoiceItems[i].unitPrice = v===''? '' : parseFloat(v);
+        updateRowTotal();
+      };
+      row.querySelector('.itemPrice').onblur = e=>{ if(e.target.value==='' || isNaN(currentInvoiceItems[i].unitPrice)){ currentInvoiceItems[i].unitPrice=0; e.target.value=0; } updateRowTotal(); };
+      row.querySelector('.itemDel').onclick = ()=>{ currentInvoiceItems.splice(i,1); renderInvoiceItems(); };
+    });
+  }
+  updateRunningTotal();
+}
+function updateRunningTotal(){
+  const cur = clientById(document.getElementById('inv-client').value)?.currency || 'KRW';
+  const total = currentInvoiceItems.reduce((s,it)=>s+(Number(it.qty)||0)*(Number(it.unitPrice)||0),0);
+  document.getElementById('invRunningTotal').textContent = '합계: ' + fmt(total, cur);
+}
+renderInvoiceItems();
+
+document.getElementById('buildInvoiceBtn').onclick = async ()=>{
+  const cid = document.getElementById('inv-client').value;
+  const client = clientById(cid);
+  if(!client || !currentInvoiceItems.length){ toast('클라이언트와 항목을 확인해주세요.'); return; }
+  const issueDate = document.getElementById('inv-issue').value;
+  const dueDate = document.getElementById('inv-due').value;
+  if(!issueDate){ toast('발행일을 입력해주세요.'); return; }
+  const lang = invoiceLangFor(client);
+  const cur = client.currency;
+  const memo = document.getElementById('inv-memo').value.trim() || (lang==='KR'? settings.memoKR : settings.memoEN);
+  const sanitizedItems = currentInvoiceItems.map(it=>({...it, qty:Number(it.qty)||0, unitPrice:Number(it.unitPrice)||0}));
+  const total = sanitizedItems.reduce((s,it)=>s+it.qty*it.unitPrice,0);
+
+  let invoice;
+  if(editingInvoiceId){
+    invoice = invoices.find(i=>i.id===editingInvoiceId);
+    Object.assign(invoice, { clientId:cid, issueDate, dueDate, items:JSON.parse(JSON.stringify(sanitizedItems)), currency:cur, lang, total, memo });
+    toast('인보이스가 수정되었습니다.');
+  } else {
+    const number = 'INV-' + String(invoiceCounter).padStart(4,'0');
+    invoice = { id:uid('inv'), number, clientId:cid, issueDate, dueDate, items:JSON.parse(JSON.stringify(sanitizedItems)),
+      currency:cur, lang, total, memo, status:'draft', createdAt:Date.now() };
+    invoices.push(invoice);
+    invoiceCounter += 1;
+    await saveCounter();
+    toast('인보이스가 생성되었습니다.');
+  }
+  await saveInvoices();
+
+  // mark linked task/milestone items as billed (if currently unbilled)
+  currentInvoiceItems.forEach(it=>{
+    if(it.kind==='task'){ const t=tasks.find(x=>x.id===it.refId); if(t && t.paymentStatus==='unbilled') t.paymentStatus='billed'; }
+    if(it.kind==='receipt'){ const r=receipts.find(x=>x.id===it.refId); if(r) r.billingStatus='billed'; }
+    if(it.kind==='milestone'){ const p=projectById(it.projectId); const ms=p && (p.paymentPlan||[]).find(x=>x.id===it.refId); if(ms && ms.status==='미청구') ms.status='청구완료'; }
+  });
+  await saveTasks(); await saveReceipts(); await saveProjects();
+
+  renderInvoiceDoc(invoice, client);
+  currentInvoiceItems = []; editingInvoiceId = null;
+  document.getElementById('buildInvoiceBtn').textContent = '인보이스 생성';
+  renderInvoiceItems();
+  document.getElementById('inv-memo').value='';
+  renderAll();
+};
+
+function renderInvoiceDoc(invoice, client){
+  const L = LABELS[invoice.lang];
+  const bank = invoice.lang==='KR' ? settings.bankKR : settings.bankCA;
+  document.getElementById('invoiceDocWrap').style.display='block';
+  document.getElementById('invoiceDoc').innerHTML = `
+    <div class="inv-top">
+      <div>
+        <h2 style="font-size:24px;">${L.invoice}</h2>
+        <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">${L.number}: ${escapeHtml(invoice.number)}</div>
+        <div style="font-size:12px;color:var(--ink-soft);">${L.issue}: ${fmtDate(invoice.issueDate, invoice.lang)}</div>
+        <div style="font-size:12px;color:var(--ink-soft);">${L.due}: ${fmtDate(invoice.dueDate, invoice.lang)}</div>
+        <div style="margin-top:10px;font-size:12.5px;"><b>${L.from}</b><br>${escapeHtml(settings.brand||'-')}<br>${escapeHtml(settings.email||'')}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:12px;color:var(--ink-soft);">${L.billTo}</div>
+        <div style="font-size:14px;font-weight:700;">${escapeHtml(client.name)}</div>
+        <div style="font-size:12px;color:var(--ink-soft);">${escapeHtml(client.email||'')}</div>
+      </div>
+    </div>
+    <table><thead><tr><th>${L.item}</th><th class="right">${L.qty}</th><th class="right">${L.price}</th><th class="right">${L.amount}</th></tr></thead>
+    <tbody>${invoice.items.map(it=>`<tr><td>${escapeHtml(it.title)}</td><td class="right">${it.qty}</td><td class="right">${fmt(it.unitPrice, invoice.currency)}</td><td class="right">${fmt(it.qty*it.unitPrice, invoice.currency)}</td></tr>`).join('')}</tbody></table>
+    <div class="inv-total-row">${L.total}: ${fmt(invoice.total, invoice.currency)}</div>
+    ${invoice.memo? `<div style="margin-top:18px;font-size:12px;color:#444;">${L.memo}: ${escapeHtml(invoice.memo)}</div>`:''}
+    ${bank && (bank.account||bank.bank) ? `<div style="margin-top:10px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-soft);">
+      ${L.bank}: ${escapeHtml(bank.bank||'')} ${escapeHtml(bank.account||'')} ${bank.transit?('· Transit '+escapeHtml(bank.transit)):''} ${bank.holder?('('+escapeHtml(bank.holder)+')'):''}
+    </div>`:''}
+  `;
+  document.getElementById('invoiceDocWrap').dataset.invId = invoice.id;
+}
+
+document.getElementById('pdfBtn').onclick = async ()=>{
+  const invId = document.getElementById('invoiceDocWrap').dataset.invId;
+  const invoice = invoices.find(i=>i.id===invId);
+  const client = clientById(invoice.clientId);
+  const node = document.getElementById('invoiceDoc');
+  try{
+    const canvas = await html2canvas(node, {scale:2, backgroundColor:'#ffffff'});
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p','mm','a4');
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const imgWidth = pageWidth - 20;
+    const imgHeight = canvas.height * imgWidth / canvas.width;
+    pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+    const blob = pdf.output('blob');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Invoice_${client.name.replace(/\s+/g,'')}_${invoice.number}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 3000);
+    toast('PDF가 저장되었습니다.');
+  }catch(e){ console.error(e); toast('PDF 생성 중 오류가 발생했어요. (이미지 차단/네트워크 문제일 수 있어요)'); }
+};
+document.getElementById('editInvoiceBtn').onclick = ()=>{
+  const invId = document.getElementById('invoiceDocWrap').dataset.invId;
+  const inv = invoices.find(i=>i.id===invId);
+  if(!inv) return;
+  editingInvoiceId = inv.id;
+  document.getElementById('inv-client').value = inv.clientId;
+  updateLangPreview();
+  document.getElementById('inv-issue').value = inv.issueDate;
+  document.getElementById('inv-due').value = inv.dueDate;
+  document.getElementById('inv-memo').value = inv.memo || '';
+  currentInvoiceItems = JSON.parse(JSON.stringify(inv.items));
+  renderInvoiceItems();
+  document.getElementById('buildInvoiceBtn').textContent = '수정 내용 저장';
+  document.querySelector('.card .field-row').scrollIntoView({behavior:'smooth'});
+  toast('인보이스를 수정 모드로 불러왔어요. 변경 후 저장하세요.');
+};
+
+async function applyInvoiceStatus(invId, newStatus){
+  const inv = invoices.find(i=>i.id===invId);
+  if(!inv) return;
+  inv.status = newStatus;
+  if(newStatus==='paid'){
+    for(const it of inv.items){
+      if(it.kind==='task'){
+        const t=tasks.find(x=>x.id===it.refId);
+        if(t){ t.paymentStatus='paid'; t.receivedAmount=t.estimateAmount; await syncIncomeForTask(t); }
+      }
+      if(it.kind==='receipt'){ const r=receipts.find(x=>x.id===it.refId); if(r) r.billingStatus='settled'; }
+      if(it.kind==='milestone'){
+        const p = projectById(it.projectId);
+        const ms = p && (p.paymentPlan||[]).find(x=>x.id===it.refId);
+        if(ms){ ms.status='입금완료'; ms.paidDate=todayStr(); await syncIncomeForMilestone(ms, p); }
+      }
+    }
+    await saveTasks(); await saveReceipts(); await saveProjects();
+    toast('입금완료 처리되어 수입기록에 반영되었습니다.');
+  } else {
+    toast('상태가 변경되었습니다.');
+  }
+  await saveInvoices();
+  renderAll();
+}
+
+function renderSavedInvoices(){
+  const wrap = document.getElementById('savedInvoicesWrap');
+  if(!invoices.length){ wrap.innerHTML='<div class="empty">저장된 인보이스가 없어요.</div>'; return; }
+  const list = invoices.slice().sort((a,b)=>b.createdAt-a.createdAt);
+  wrap.innerHTML = list.map(inv=>{
+    const c = clientById(inv.clientId);
+    const overdue = inv.status!=='paid' && inv.dueDate && inv.dueDate < todayStr();
+    const statusKey = overdue? 'overdue' : inv.status;
+    return `<div class="invoice-list-card" data-id="${inv.id}">
+      <div style="width:30px;height:30px;border-radius:50%;background:${clientColor(c?c.name:'?')};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none;">${(c?c.name:'?')[0]}</div>
+      <div style="flex:1;"><b>${escapeHtml(inv.number)}</b><div style="color:var(--ink-soft);font-size:11px;">${c?escapeHtml(c.name):'-'} · ${inv.issueDate} · ${inv.lang}</div></div>
+      <div style="font-weight:600;width:100px;text-align:right;">${fmt(inv.total, inv.currency)}</div>
+      ${overdue?`<span class="badge overdue">연체</span>`:''}
+      <select class="invStatusSel chip" data-id="${inv.id}" style="min-width:110px;">
+        <option value="draft" ${inv.status==='draft'?'selected':''}>초안</option>
+        <option value="issued" ${inv.status==='issued'?'selected':''}>발행완료</option>
+        <option value="paid" ${inv.status==='paid'?'selected':''}>입금완료</option>
+      </select>
+      <button class="iconbtn-sm openInvBtn">보기</button>
+      <button class="iconbtn-sm delInvBtn" style="color:var(--bad)">삭제</button>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('.openInvBtn').forEach(btn=>{
+    btn.onclick=()=>{ const id=btn.closest('[data-id]').dataset.id; const inv=invoices.find(i=>i.id===id); renderInvoiceDoc(inv, clientById(inv.clientId)); window.scrollTo({top:0,behavior:'smooth'}); };
+  });
+  wrap.querySelectorAll('.delInvBtn').forEach(btn=>{
+    btn.onclick = async ()=>{
+      if(!confirm('이 인보이스를 삭제할까요?')) return;
+      const id=btn.closest('[data-id]').dataset.id;
+      invoices = invoices.filter(i=>i.id!==id);
+      await saveInvoices();
+      toast('삭제되었습니다.');
+      renderAll();
+    };
+  });
+  wrap.querySelectorAll('.invStatusSel').forEach(sel=>{
+    sel.onchange = e=>applyInvoiceStatus(sel.dataset.id, e.target.value);
+  });
+}
+
+/* ================= RECEIPTS ================= */
+function openReceiptModal(existing){
+  const r = existing || {};
+  const html = `
+    <div class="field-row">
+      <div class="field"><label>날짜 *</label><input type="date" id="m-date" value="${r.date||todayStr()}"></div>
+      <div class="field"><label>거래처/결제처 *</label><input id="m-vendor" value="${escapeHtml(r.vendor||'')}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>클라이언트/프로젝트</label><select id="m-client"><option value="">-</option>${clientOptions(r.clientId)}</select></div>
+      <div class="field"><label>연결된 업무</label><select id="m-task"><option value="">-</option>${tasks.map(t=>`<option value="${t.id}" ${r.linkedTaskId===t.id?'selected':''}>${escapeHtml(t.title)}</option>`).join('')}</select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>통화</label><select id="m-currency">${['KRW','CAD','USD'].map(c=>`<option ${r.currency===c?'selected':''}>${c}</option>`).join('')}</select></div>
+      <div class="field"><label>금액 *</label><input type="number" id="m-amount" value="${r.amount||''}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>비용 유형</label><select id="m-exptype">
+        ${[['work','업무 비용'],['personal','개인 비용'],['toBill','클라이언트 청구 예정'],['billed','청구 완료'],['settled','이미 정산 받음']].map(([v,l])=>`<option value="${v}" ${r.expenseType===v?'selected':''}>${l}</option>`).join('')}
+      </select></div>
+      <div class="field"><label>청구 상태</label><select id="m-billstatus">
+        ${[['unbilled','미청구'],['toBill','청구 예정'],['billed','인보이스 포함됨'],['settled','정산완료']].map(([v,l])=>`<option value="${v}" ${r.billingStatus===v?'selected':''}>${l}</option>`).join('')}
+      </select></div>
+    </div>
+    <div class="field"><label>메모</label><input id="m-memo" value="${escapeHtml(r.memo||'')}"></div>
+    <div class="field"><label>영수증 이미지</label><input type="file" id="m-file" accept="image/*"></div>
+  `;
+  openModal(existing?'영수증 수정':'영수증 저장', html, async ()=>{
+    const date=document.getElementById('m-date').value;
+    const vendor=document.getElementById('m-vendor').value.trim();
+    const amount=parseFloat(document.getElementById('m-amount').value);
+    if(!date||!vendor||!amount){ toast('필수 항목을 입력해주세요.'); return; }
+    let image = r.image || null;
+    const f = document.getElementById('m-file').files[0];
+    if(f){
+      try{ image = await compressImageFile(f); }
+      catch(e){ console.error('image compress failed', e); toast('이미지 처리에 실패해서 첨부 없이 저장돼요.'); image = null; }
+    }
+    const data = { date, vendor, clientId:document.getElementById('m-client').value||null, linkedTaskId:document.getElementById('m-task').value||null,
+      currency:document.getElementById('m-currency').value, amount, expenseType:document.getElementById('m-exptype').value,
+      billingStatus:document.getElementById('m-billstatus').value, memo:document.getElementById('m-memo').value.trim(), image };
+    if(existing){ Object.assign(existing, data); toast('영수증이 수정되었습니다.'); }
+    else{ receipts.push({id:uid('r'), createdAt:Date.now(), ...data}); toast('영수증이 저장되었습니다.'); }
+    await saveReceipts(); closeModal(); renderAll();
+  });
+}
+document.getElementById('addReceiptBtn').onclick = ()=>openReceiptModal(null);
+
+function expTypeLabel(v){ return {work:'업무비용',personal:'개인비용',toBill:'청구예정',billed:'청구완료',settled:'정산받음'}[v]||v; }
+function billLabel(v){ return {unbilled:'미청구',toBill:'청구예정','billed':'인보이스포함',settled:'정산완료'}[v]||v; }
+
+function renderReceipts(){
+  const clientSel = document.getElementById('rcFilterClient');
+  const prevC = clientSel.value;
+  clientSel.innerHTML = '<option value="">전체 클라이언트</option>' + clients.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  clientSel.value = prevC;
+  const typeF = document.getElementById('rcFilterType').value;
+  clientSel.onchange = renderReceipts; document.getElementById('rcFilterType').onchange = renderReceipts;
+
+  let list = receipts.slice();
+  if(clientSel.value) list = list.filter(r=>r.clientId===clientSel.value);
+  if(typeF) list = list.filter(r=>r.expenseType===typeF);
+  list.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+  const wrap = document.getElementById('receiptListWrap');
+  if(!list.length){ wrap.innerHTML='<div class="empty">저장된 영수증이 없어요.</div>'; return; }
+  wrap.innerHTML = list.map(r=>{
+    const c = r.clientId? clientById(r.clientId): null;
+    return `<div class="row-flex" data-id="${r.id}" style="padding:10px 0;border-bottom:1px solid var(--line);">
+      ${r.image?`<img src="${r.image}" style="width:46px;height:46px;border-radius:9px;object-fit:cover;">`:`<div style="width:46px;height:46px;border-radius:9px;background:var(--panel2);display:flex;align-items:center;justify-content:center;">🧾</div>`}
+      <div style="flex:1;"><b>${escapeHtml(r.vendor)}</b><div style="font-size:11px;color:var(--ink-soft);">${r.date} ${c?'· '+escapeHtml(c.name):''} ${r.memo?'· '+escapeHtml(r.memo):''}</div></div>
+      <span class="badge unbilled" style="background:var(--panel2);color:var(--ink-soft);">${expTypeLabel(r.expenseType)}</span>
+      <span class="badge billed">${billLabel(r.billingStatus)}</span>
+      <div style="font-weight:600;width:90px;text-align:right;">${fmt(r.amount,r.currency)}</div>
+      <button class="iconbtn-sm editBtn">수정</button><button class="iconbtn-sm delBtn" style="color:var(--bad)">삭제</button>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('[data-id]').forEach(row=>{
+    const id=row.dataset.id; const r=receipts.find(x=>x.id===id);
+    row.querySelector('.editBtn').onclick=()=>openReceiptModal(r);
+    row.querySelector('.delBtn').onclick=async()=>{ if(!confirm('삭제할까요?'))return; receipts=receipts.filter(x=>x.id!==id); await saveReceipts(); toast('삭제되었습니다.'); renderAll(); };
+  });
+}
+
+/* ================= CLIENTS ================= */
+function openClientModal(existing){
+  const c = existing || {};
+  const html = `
+    <div class="field-row">
+      <div class="field"><label>클라이언트명 *</label><input id="m-name" value="${escapeHtml(c.name||'')}"></div>
+      <div class="field"><label>회사명</label><input id="m-company" value="${escapeHtml(c.companyName||'')}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>이메일</label><input id="m-email" value="${escapeHtml(c.email||'')}"></div>
+      <div class="field"><label>전화번호</label><input id="m-phone" value="${escapeHtml(c.phone||'')}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>국가 (인보이스 언어 결정) *</label><select id="m-country">
+        <option value="KR" ${c.country==='KR'?'selected':''}>한국 (한국어 인보이스)</option>
+        <option value="CA" ${c.country==='CA'?'selected':''}>캐나다 (English invoice)</option>
+      </select></div>
+      <div class="field"><label>기본 통화</label><select id="m-currency">${['KRW','CAD','USD'].map(cur=>`<option ${c.currency===cur?'selected':''}>${cur}</option>`).join('')}</select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>카테고리</label><select id="m-category">${categories.map(cat=>`<option ${c.category===cat.name?'selected':''}>${escapeHtml(cat.name)}</option>`).join('')}</select></div>
+      <div class="field"><label>기본 청구 방식 *</label><select id="m-billmodel">
+        <option value="per_task" ${(c.billingModel||'per_task')==='per_task'?'selected':''}>건별 외주 (건별 인보이스)</option>
+        <option value="salary" ${c.billingModel==='salary'?'selected':''}>월급 포함 (회사/재택)</option>
+      </select></div>
+    </div>
+    <div class="field"><label>메모</label><input id="m-memo" value="${escapeHtml(c.memo||'')}"></div>
+  `;
+  openModal(existing?'클라이언트 수정':'클라이언트 추가', html, async ()=>{
+    const name=document.getElementById('m-name').value.trim();
+    if(!name){ toast('클라이언트명을 입력해주세요.'); return; }
+    const data = { name, companyName:document.getElementById('m-company').value.trim(), email:document.getElementById('m-email').value.trim(),
+      phone:document.getElementById('m-phone').value.trim(), country:document.getElementById('m-country').value,
+      currency:document.getElementById('m-currency').value, category:document.getElementById('m-category').value,
+      billingModel:document.getElementById('m-billmodel').value, memo:document.getElementById('m-memo').value.trim() };
+    if(existing){ Object.assign(existing, data); toast('수정되었습니다.'); }
+    else{ clients.push({id:uid('c'), createdAt:Date.now(), ...data}); toast('클라이언트가 추가되었습니다.'); }
+    await saveClients(); closeModal(); renderAll();
+  });
+}
+document.getElementById('addClientBtn').onclick = ()=>openClientModal(null);
+
+function renderClients(){
+  const wrap = document.getElementById('clientCardsWrap');
+  if(!clients.length){ wrap.innerHTML='<div class="empty">클라이언트가 없어요.</div>'; return; }
+  wrap.innerHTML = clients.map(c=>{
+    const cTasks = tasks.filter(t=>t.clientId===c.id);
+    const totalIncome = cTasks.reduce((s,t)=>s+(t.currency===c.currency?Number(t.receivedAmount):0),0);
+    const unpaid = cTasks.reduce((s,t)=>s+(t.currency===c.currency?remaining(t):0),0);
+    return `<div class="card" data-id="${c.id}">
+      <div class="row-flex" style="margin-bottom:12px;">
+        <div style="width:34px;height:34px;border-radius:50%;background:${clientColor(c.name)};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none;">${c.name[0]}</div>
+        <div style="flex:1;"><b style="font-size:14px;">${escapeHtml(c.name)}</b><div style="font-size:11px;color:var(--ink-soft);margin-top:3px;">${c.country==='KR'?'🇰🇷 한국':'🇨🇦 Canada'} · ${c.currency} · ${escapeHtml(c.category||'-')}</div></div>
+        <span class="badge ${c.billingModel==='salary'?'salary':'billed'}" style="flex:none;">${c.billingModel==='salary'?'월급 포함':'건별 외주'}</span>
+      </div>
+      <div class="stat-sub" style="line-height:1.7;">업무 ${cTasks.length}건<br>수입 ${fmt(totalIncome,c.currency)}${c.billingModel!=='salary'?`<br>미수금 ${fmt(unpaid,c.currency)}`:''}</div>
+      ${c.email?`<div class="stat-sub" style="margin-top:4px;">${escapeHtml(c.email)}</div>`:''}
+      <div class="row-flex" style="margin-top:14px;gap:8px;">
+        <button class="btn sm light editClientBtn">수정</button>
+        <button class="btn sm danger delClientBtn">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('[data-id]').forEach(card=>{
+    const id=card.dataset.id; const c=clients.find(x=>x.id===id);
+    card.querySelector('.editClientBtn').onclick=()=>openClientModal(c);
+    card.querySelector('.delClientBtn').onclick=async()=>{
+      if(!confirm('이 클라이언트를 삭제할까요? 연결된 업무 기록은 유지됩니다.'))return;
+      clients=clients.filter(x=>x.id!==id); await saveClients(); toast('삭제되었습니다.'); renderAll();
+    };
+  });
+}
+
+/* ================= PROJECTS ================= */
+let editingPaymentPlan = []; // working copy of milestones while the project modal is open
+
+function renderMilestoneEditor(){
+  const wrap = document.getElementById('m-milestones-wrap');
+  if(!wrap) return;
+  if(!editingPaymentPlan.length){ wrap.innerHTML = '<div class="empty" style="padding:14px 0;">결제 단계를 추가해주세요 (선금/중도금/잔금 등)</div>'; }
+  else{
+    wrap.innerHTML = editingPaymentPlan.map((ms,i)=>`
+      <div class="row-flex" data-i="${i}" style="margin-bottom:8px;">
+        <input class="msLabel" value="${escapeHtml(ms.label)}" placeholder="예: 선금" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-family:inherit;font-size:13px;background:var(--panel2);height:36px;box-sizing:border-box;">
+        <input class="msAmount" type="number" value="${ms.amount}" placeholder="금액" style="width:110px;border:1px solid var(--line);border-radius:9px;padding:8px;font-family:inherit;font-size:13px;background:var(--panel2);height:36px;box-sizing:border-box;">
+        <input class="msDue" type="date" value="${ms.dueDate||''}" style="width:130px;border:1px solid var(--line);border-radius:9px;padding:8px;font-family:inherit;font-size:13px;background:var(--panel2);height:36px;box-sizing:border-box;">
+        <select class="msStatus chip" style="height:36px;">
+          ${['미청구','청구완료','입금완료','연체'].map(s=>`<option ${ms.status===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+        <button class="iconbtn-sm msDel" style="color:var(--bad);flex:none;">✕</button>
+      </div>`).join('');
+    wrap.querySelectorAll('[data-i]').forEach(row=>{
+      const i = Number(row.dataset.i);
+      row.querySelector('.msLabel').oninput = e=>editingPaymentPlan[i].label=e.target.value;
+      row.querySelector('.msAmount').oninput = e=>editingPaymentPlan[i].amount=parseFloat(e.target.value)||0;
+      row.querySelector('.msDue').oninput = e=>editingPaymentPlan[i].dueDate=e.target.value;
+      row.querySelector('.msStatus').onchange = e=>{ editingPaymentPlan[i].status=e.target.value; if(e.target.value==='입금완료' && !editingPaymentPlan[i].paidDate) editingPaymentPlan[i].paidDate=todayStr(); };
+      row.querySelector('.msDel').onclick = ()=>{ editingPaymentPlan.splice(i,1); renderMilestoneEditor(); };
+    });
+  }
+}
+document.addEventListener('click', e=>{
+  if(e.target && e.target.id==='m-add-milestone'){
+    editingPaymentPlan.push({id:uid('ms'), label:'', amount:0, dueDate:'', status:'미청구', invoiceId:null, paidDate:null, memo:''});
+    renderMilestoneEditor();
+  }
+});
+
+function openProjectModal(existing){
+  const p = existing || {};
+  editingPaymentPlan = existing ? JSON.parse(JSON.stringify(existing.paymentPlan||[])) : [];
+  const html = `
+    <div class="field-row">
+      <div class="field"><label>클라이언트 *</label><select id="m-p-client">${clientOptions(p.clientId)}</select></div>
+      <div class="field"><label>프로젝트명 *</label><input id="m-p-title" value="${escapeHtml(p.title||'')}"></div>
+    </div>
+    <div class="field"><label>설명</label><textarea id="m-p-desc" rows="2">${escapeHtml(p.description||'')}</textarea></div>
+    <div class="field-row">
+      <div class="field"><label>총 계약금 *</label><input type="number" id="m-p-total" value="${p.totalAmount||''}"></div>
+      <div class="field"><label>통화</label><select id="m-p-currency">${['KRW','CAD','USD'].map(c=>`<option ${p.currency===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>상태</label><select id="m-p-status">
+        ${['진행 중','완료','보류','취소'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}
+      </select></div>
+      <div class="field"><label>마감일</label><input type="date" id="m-p-due" value="${p.dueDate||''}"></div>
+    </div>
+    <div class="field"><label>메모</label><input id="m-p-memo" value="${escapeHtml(p.memo||'')}"></div>
+
+    <div class="field" style="margin-top:6px;">
+      <label>결제 단계 (선금 / 중도금 / 잔금 등)</label>
+      <div id="m-milestones-wrap"></div>
+      <button class="btn light" id="m-add-milestone" type="button" style="width:100%;margin-top:4px;">+ 결제 단계 추가</button>
+    </div>
+  `;
+  openModal(existing?'프로젝트 수정':'프로젝트 추가', html, async ()=>{
+    const clientId = document.getElementById('m-p-client').value;
+    const title = document.getElementById('m-p-title').value.trim();
+    const totalAmount = parseFloat(document.getElementById('m-p-total').value);
+    if(!clientId || !title || !totalAmount){ toast('필수 항목을 입력해주세요.'); return; }
+    const removedIds = existing ? (existing.paymentPlan||[]).filter(old=>!editingPaymentPlan.some(m=>m.id===old.id)).map(m=>m.id) : [];
+    const data = {
+      clientId, title, description:document.getElementById('m-p-desc').value.trim(),
+      totalAmount, currency:document.getElementById('m-p-currency').value, status:document.getElementById('m-p-status').value,
+      dueDate:document.getElementById('m-p-due').value, memo:document.getElementById('m-p-memo').value.trim(),
+      paymentPlan: editingPaymentPlan
+    };
+    if(existing){ Object.assign(existing, data); toast('프로젝트가 수정되었습니다.'); }
+    else{ projects.push({id:uid('proj'), createdAt:Date.now(), linkedTaskIds:[], startDate:todayStr(), ...data}); toast('프로젝트가 추가되었습니다.'); }
+    if(removedIds.length){ incomes = incomes.filter(x=>!removedIds.includes(x.milestoneId)); await saveIncomes(); }
+    await saveProjects(); closeModal(); renderAll();
+  });
+  renderMilestoneEditor();
+}
+document.getElementById('addProjectBtn').onclick = ()=>openProjectModal(null);
+
+async function setMilestoneStatus(projectId, msId, status){
+  const p = projectById(projectId);
+  const ms = p && (p.paymentPlan||[]).find(x=>x.id===msId);
+  if(!ms) return;
+  ms.status = status;
+  if(status==='입금완료') ms.paidDate = todayStr();
+  await saveProjects();
+  await syncIncomeForMilestone(ms, p);
+  if(status==='입금완료') toast('입금완료 처리되어 수입기록에 반영되었습니다.');
+  renderAll();
+}
+async function deleteProject(id){
+  if(!confirm('이 프로젝트를 삭제할까요? 연결된 수입 기록도 함께 삭제돼요.')) return;
+  const p = projectById(id);
+  const msIds = (p?.paymentPlan||[]).map(m=>m.id);
+  projects = projects.filter(x=>x.id!==id);
+  incomes = incomes.filter(x=>!msIds.includes(x.milestoneId));
+  await saveProjects(); await saveIncomes();
+  toast('삭제되었습니다.'); renderAll();
+}
+
+function renderProjectCards(){
+  const wrap = document.getElementById('projectCardsWrap');
+  if(!projects.length){ wrap.innerHTML='<div class="empty">등록된 프로젝트가 없어요.</div>'; return; }
+  wrap.innerHTML = projects.map(p=>{
+    const c = clientById(p.clientId);
+    const received = (p.paymentPlan||[]).filter(m=>m.status==='입금완료').reduce((s,m)=>s+Number(m.amount||0),0);
+    const remain = Math.max(0, Number(p.totalAmount||0) - received);
+    const pct = p.totalAmount ? Math.round(received/p.totalAmount*100) : 0;
+    return `<div class="card" data-id="${p.id}">
+      <div class="row-flex" style="justify-content:space-between;margin-bottom:6px;">
+        <div><b style="font-size:15px;">${escapeHtml(p.title)}</b><div style="font-size:11px;color:var(--ink-soft);margin-top:2px;">${c?escapeHtml(c.name):'-'}</div></div>
+        <span class="badge ${p.status==='완료'?'paid':p.status==='취소'?'overdue':'billed'}">${escapeHtml(p.status)}</span>
+      </div>
+      <div class="stat-sub" style="margin-bottom:8px;">총 계약금 ${fmt(p.totalAmount,p.currency)} · 받은금액 ${fmt(received,p.currency)} · 미수금 ${fmt(remain,p.currency)}</div>
+      <div class="progressline" style="margin-bottom:12px;"><i style="width:${pct}%;"></i></div>
+      <div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;">결제 진행률 ${pct}%</div>
+      <div class="ms-list">
+        ${(p.paymentPlan||[]).map(ms=>`
+          <div class="row-flex" data-msid="${ms.id}" style="padding:6px 0;border-bottom:1px solid var(--line);">
+            <div style="flex:1;font-size:12.5px;">${escapeHtml(ms.label)}</div>
+            <div style="width:90px;text-align:right;font-size:12.5px;">${fmt(ms.amount,p.currency)}</div>
+            <select class="msStatusSel chip" style="height:30px;font-size:11px;padding:0 10px;">
+              ${['미청구','청구완료','입금완료','연체'].map(s=>`<option ${ms.status===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+          </div>`).join('') || '<div class="empty" style="padding:8px 0;">결제 단계 없음</div>'}
+      </div>
+      <div class="row-flex" style="margin-top:14px;gap:8px;">
+        <button class="btn sm light editProjectBtn">수정</button>
+        <button class="btn sm danger delProjectBtn">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('[data-id]').forEach(card=>{
+    const id=card.dataset.id; const p=projects.find(x=>x.id===id);
+    card.querySelector('.editProjectBtn').onclick=()=>openProjectModal(p);
+    card.querySelector('.delProjectBtn').onclick=()=>deleteProject(id);
+    card.querySelectorAll('[data-msid]').forEach(row=>{
+      row.querySelector('.msStatusSel').onchange = e=>setMilestoneStatus(id, row.dataset.msid, e.target.value);
+    });
+  });
+}
+
+/* ================= SETTINGS ================= */
+function fillSettingsForm(){
+  document.getElementById('st-brand').value=settings.brand||'';
+  document.getElementById('st-email').value=settings.email||'';
+  document.getElementById('st-phone').value=settings.phone||'';
+  document.getElementById('st-defcur').value=settings.defaultCurrency||'KRW';
+  document.getElementById('st-bankkr-bank').value=settings.bankKR.bank||'';
+  document.getElementById('st-bankkr-account').value=settings.bankKR.account||'';
+  document.getElementById('st-bankkr-holder').value=settings.bankKR.holder||'';
+  document.getElementById('st-bankca-bank').value=settings.bankCA.bank||'';
+  document.getElementById('st-bankca-account').value=settings.bankCA.account||'';
+  document.getElementById('st-bankca-transit').value=settings.bankCA.transit||'';
+  document.getElementById('st-bankca-holder').value=settings.bankCA.holder||'';
+  document.getElementById('st-memokr').value=settings.memoKR||'';
+  document.getElementById('st-memoen').value=settings.memoEN||'';
+  document.getElementById('st-taxrate').value=settings.taxRate||0;
+  document.getElementById('st-goal').value=settings.goal||0;
+}
+document.getElementById('saveSettingsBtn').onclick = async ()=>{
+  settings = {
+    brand:document.getElementById('st-brand').value.trim(), email:document.getElementById('st-email').value.trim(),
+    phone:document.getElementById('st-phone').value.trim(), defaultCurrency:document.getElementById('st-defcur').value,
+    bankKR:{ bank:document.getElementById('st-bankkr-bank').value.trim(), account:document.getElementById('st-bankkr-account').value.trim(), holder:document.getElementById('st-bankkr-holder').value.trim() },
+    bankCA:{ bank:document.getElementById('st-bankca-bank').value.trim(), account:document.getElementById('st-bankca-account').value.trim(), transit:document.getElementById('st-bankca-transit').value.trim(), holder:document.getElementById('st-bankca-holder').value.trim() },
+    memoKR:document.getElementById('st-memokr').value.trim(), memoEN:document.getElementById('st-memoen').value.trim(),
+    taxRate:parseFloat(document.getElementById('st-taxrate').value)||0, goal:parseFloat(document.getElementById('st-goal').value)||0
+  };
+  await saveSettings(); toast('설정이 저장되었습니다.'); renderAll();
+};
+document.getElementById('exportCsvBtn').onclick = ()=>{
+  const rows = [['날짜','클라이언트','업무','통화','견적금액','받은금액','결제상태']];
+  tasks.forEach(t=>{ const c=clientById(t.clientId); rows.push([t.date, c?c.name:'', t.title, t.currency, t.estimateAmount, t.receivedAmount, payLabel(t.paymentStatus)]); });
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='flowly_income.csv'; a.click();
+  toast('CSV가 다운로드되었습니다.');
+};
+document.getElementById('resetDataBtn').onclick = async ()=>{
+  if(!confirm('정말 모든 데이터를 초기화할까요? 되돌릴 수 없습니다.')) return;
+  try{ await window.storage.delete(CORE_KEY); }catch(e){ console.error('reset delete failed', e); }
+  try{ await window.storage.delete(RECEIPTS_KEY); }catch(e){ console.error('reset delete failed', e); }
+  toast('데이터가 초기화되었습니다. 새로고침합니다.');
+  setTimeout(()=>location.reload(), 800);
+};
+
+/* ================= DASHBOARD ================= */
+let calCursor = new Date();
+let selectedDayDate = null;
+
+function greet(){
+  document.getElementById('greetText').textContent = 'Good morning, yeonni';
+  const quotes = [
+    '바쁘게 흘러가는 하루도, 결국은 당신의 계절이 되어줄 거예요.',
+    '서두르지 않아도 괜찮아요. 마음이 가는 속도로 걸어가면 돼요.',
+    '오늘 흘린 작은 노력들이, 언젠가 조용히 빛이 되어 돌아올 거예요.',
+    '바람이 부는 날도 있고, 잔잔한 날도 있어요. 지금은 그저 흘러가는 중일 뿐이에요.',
+    '애쓰고 있는 당신의 하루를, 마음 깊이 응원해요.',
+    '잠깐 멈춰서 숨을 고르는 것도, 앞으로 나아가는 하나의 방법이에요.',
+    '오늘의 당신은 어제보다 분명히 한 걸음 더 와 있어요.',
+    '결과보다 그 시간을 견뎌낸 당신을 먼저 안아주고 싶어요.'
+  ];
+  document.getElementById('greetSub').textContent = quotes[Math.floor(Math.random()*quotes.length)];
+}
+
+function groupCurTotals(list){
+  const t={}; list.forEach(x=>{ t[x.currency]=(t[x.currency]||0)+Number(x.receivedAmount||0); });
+  return t;
+}
+function renderDashboard(){
+  const now = new Date();
+  const thisYM = now.toISOString().slice(0,7);
+
+  // Dashboard income must come from the Income ledger (incomes[]), not by scanning tasks directly —
+  // tasks-only would miss salary entries and project milestone payouts entirely.
+  // mini graph: last 6 months total income (KRW) from the Income ledger
+  const monthsArr=[]; for(let i=5;i>=0;i--){ const d=new Date(); d.setMonth(d.getMonth()-i); monthsArr.push(d.toISOString().slice(0,7)); }
+  const sumsArr = monthsArr.map(m=>incomes.filter(x=>(x.date||'').slice(0,7)===m && x.currency==='KRW').reduce((s,x)=>s+Number(x.amount||0),0));
+  document.getElementById('incomeChart').innerHTML = renderSparkline(sumsArr, monthsArr);
+
+  function renderSparkline(values, months){
+    const W=560, H=70, padX=10, padY=10, n=values.length;
+    const max = Math.max(...values, 1);
+    const stepX = (W-padX*2)/(n-1);
+    const pts = values.map((v,i)=>[padX+i*stepX, H-padY-((v/max)*(H-padY*2))]);
+    let path = `M ${pts[0][0]} ${pts[0][1]}`;
+    for(let i=0;i<pts.length-1;i++){
+      const [x0,y0]=pts[i], [x1,y1]=pts[i+1];
+      const cx=(x0+x1)/2;
+      path += ` Q ${cx} ${y0}, ${cx} ${(y0+y1)/2} Q ${cx} ${y1}, ${x1} ${y1}`;
+    }
+    const areaPath = path + ` L ${pts[n-1][0]} ${H} L ${pts[0][0]} ${H} Z`;
+    const last = pts[n-1];
+    return `
+      <div style="position:relative;">
+        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:70px;display:block;overflow:visible;">
+          <defs>
+            <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#13151A" stop-opacity="0.12"/>
+              <stop offset="100%" stop-color="#13151A" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path d="${areaPath}" fill="url(#sparkGrad)"></path>
+          <path d="${path}" fill="none" stroke="#13151A" stroke-width="1.8" stroke-linecap="round"></path>
+          <circle cx="${last[0]}" cy="${last[1]}" r="3.5" fill="#13151A"></circle>
+        </svg>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin-top:4px;">
+        ${months.map(m=>`<span style="font-size:9.5px;color:var(--ink-soft);">${m.slice(5)}월</span>`).join('')}
+      </div>`;
+  }
+
+  const counts={todo:0,doing:0,done:0};
+  tasks.forEach(t=>counts[t.status]=(counts[t.status]||0)+1);
+  const totalT = tasks.length||1;
+  const pTodo=Math.round(counts.todo/totalT*100), pDoing=Math.round(counts.doing/totalT*100), pDone=Math.round(counts.done/totalT*100);
+  document.getElementById('taskStat').innerHTML = `
+    <div class="row-flex" style="gap:0;margin-bottom:10px;">
+      <div class="stat" style="flex:1;text-align:center;"><b>${counts.todo}</b><span>할 일</span></div>
+      <div class="stat" style="flex:1;text-align:center;"><b>${counts.doing}</b><span>진행중</span></div>
+      <div class="stat" style="flex:1;text-align:center;"><b>${counts.done}</b><span>완료</span></div>
+    </div>
+    <div class="progressline" style="display:flex;">
+      <i style="width:${pTodo}%;background:#D8D3C4;border-radius:4px 0 0 4px;"></i>
+      <i style="width:${pDoing}%;background:#C8862D;border-radius:0;"></i>
+      <i style="width:${pDone}%;background:#13151A;border-radius:0 4px 4px 0;"></i>
+    </div>`;
+
+  // recent entries (worklog)
+  const recent = tasks.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);
+  document.getElementById('recentEntries').innerHTML = recent.length ? recent.map(t=>{
+    const c = clientById(t.clientId);
+    return `<div class="row-item" data-id="${t.id}">
+      <div class="avatar" style="background:${clientColor(c?c.name:'?')}">${(c?c.name:'?')[0]}</div>
+      <div class="meta"><b>${escapeHtml(c?c.name:'-')}</b><span>${escapeHtml(t.title||'-')} · ${t.date||''}</span></div>
+      <span class="badge ${t.paymentStatus}">${payLabel(t.paymentStatus)}</span>
+    </div>`;
+  }).join('') : `<div class="empty">아직 기록이 없어요</div>`;
+  document.querySelectorAll('#recentEntries .row-item').forEach(row=>{ row.onclick=()=>showEntryDetail(row.dataset.id); });
+  if(recent.length) showEntryDetail(recent[0].id);
+  else document.getElementById('entryDetail').innerHTML = `<div class="empty" style="padding:50px 0;color:rgba(255,255,255,.5);">업무를 선택하면<br>상세 내용이 여기 표시돼요</div>`;
+
+  // active tasks (not done)
+  const activeTasks = tasks.filter(t=>t.status!=='done').sort((a,b)=>(a.dueDate||'').localeCompare(b.dueDate||'')).slice(0,5);
+  const tasksCard = document.getElementById('tasksCard');
+  tasksCard.classList.toggle('dark', activeTasks.length>0);
+  document.getElementById('recentTasks').innerHTML = activeTasks.length ? activeTasks.map(t=>{
+    const c=clientById(t.clientId);
+    return `<div class="row-item">
+      <div class="avatar" style="background:${clientColor(c?c.name:'?')}">${(c?c.name:'?')[0]}</div>
+      <div class="meta"><b>${escapeHtml(t.title)}</b><span>${escapeHtml(c?c.name:'')} ${t.dueDate?'· '+t.dueDate:''}</span></div>
+      <span class="badge ${t.status}">${statusLabel(t.status)}</span>
+    </div>`;
+  }).join('') : `<div class="empty">진행 중인 할 일이 없어요</div>`;
+
+  // today timeline
+  const todays = tasks.filter(t=>t.dueDate===todayStr() && t.status!=='done');
+  document.getElementById('todayTimeline').innerHTML = todays.length ? todays.map(t=>`
+    <div class="timeline-item"><div class="timeline-dot"></div>
+      <div><b style="display:block;font-size:13px;">${escapeHtml(t.title)}</b><span style="color:var(--ink-soft);font-size:11.5px;">${escapeHtml(clientById(t.clientId)?.name||'')} · ${statusLabel(t.status)}</span></div>
+    </div>`).join('') : `<div class="empty" style="padding:14px 0;">오늘 마감인 할 일이 없어요</div>`;
+
+  renderCalendar();
+}
+
+function showEntryDetail(id){
+  const t = tasks.find(x=>x.id===id);
+  if(!t) return;
+  const c = clientById(t.clientId);
+  document.getElementById('entryDetail').innerHTML = `
+    <div class="ed-head">
+      <div><b>${escapeHtml(c?c.name:'-')}</b><span>${escapeHtml(t.title||'-')}</span></div>
+      <span class="ed-pill">${statusLabel(t.status)}</span>
+    </div>
+    <div class="ed-tags"><span>${escapeHtml(t.workType||'-')}</span><span>${payLabel(t.paymentStatus)}</span></div>
+    <div class="ed-row"><div class="ed-label">클라이언트</div><div>${escapeHtml(c?c.name:'-')}</div></div>
+    <div class="ed-row"><div class="ed-label">견적</div><div>${fmt(t.estimateAmount,t.currency)}</div></div>
+    <div class="ed-row"><div class="ed-label">받은금액</div><div>${fmt(t.receivedAmount,t.currency)}</div></div>
+    <div class="ed-row"><div class="ed-label">날짜</div><div>${t.date||'-'}</div></div>
+    <button class="ed-invoice-btn" id="edInvoiceBtn">이 클라이언트 인보이스 만들기</button>
+  `;
+  document.getElementById('edInvoiceBtn').onclick = ()=>{
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    document.querySelector('.nav-item[data-tab="invoices"]').classList.add('active');
+    document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+    document.getElementById('invoices').classList.add('active');
+    renderInvoiceClientSelect();
+    document.getElementById('inv-client').value = c.id;
+    updateLangPreview();
+    document.getElementById('loadUnpaidBtn').click();
+  };
+}
+
+function isoWeek(d){
+  const dt=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const dayNum=(dt.getUTCDay()+6)%7; dt.setUTCDate(dt.getUTCDate()-dayNum+3);
+  const firstThu=new Date(Date.UTC(dt.getUTCFullYear(),0,4));
+  return 1+Math.round((dt-firstThu)/86400000/7);
+}
+function renderCalendar(){
+  const y=calCursor.getFullYear(), m=calCursor.getMonth();
+  document.getElementById('calTitle').textContent = `${y}년 ${m+1}월`;
+  const first=new Date(y,m,1); const startDow=(first.getDay()+6)%7;
+  const daysInMonth=new Date(y,m+1,0).getDate(); const daysInPrev=new Date(y,m,0).getDate();
+  const todays=todayStr();
+  const hasSet = new Set([...tasks.map(t=>t.date), ...tasks.map(t=>t.dueDate)]);
+  let cells = ['월','화','수','목','금','토','일'].map(d=>`<div class="dow">${d}</div>`).join('');
+  for(let i=0;i<startDow;i++) cells += `<div class="day muted">${daysInPrev-startDow+1+i}</div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    let cls='day'; if(ds===todays) cls+=' today'; if(hasSet.has(ds)) cls+=' has';
+    cells += `<div class="${cls}" data-date="${ds}">${d}</div>`;
+  }
+  const total=startDow+daysInMonth; const trailing=(7-(total%7))%7;
+  for(let i=1;i<=trailing;i++) cells += `<div class="day muted">${i}</div>`;
+  document.getElementById('calGrid').innerHTML = cells;
+  document.querySelectorAll('.cal-grid .day[data-date]').forEach(el=>{
+    el.onclick = ()=>{
+      selectedDayDate = el.dataset.date;
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      document.querySelector('.nav-item[data-tab="worklog"]').classList.add('active');
+      document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+      document.getElementById('worklog').classList.add('active');
+      renderWorklog();
+      toast(`${selectedDayDate} 기록을 보여드려요`);
+    };
+  });
+}
+document.getElementById('calPrev').onclick = ()=>{ calCursor=new Date(calCursor.getFullYear(),calCursor.getMonth()-1,1); renderCalendar(); };
+document.getElementById('calNext').onclick = ()=>{ calCursor=new Date(calCursor.getFullYear(),calCursor.getMonth()+1,1); renderCalendar(); };
+document.getElementById('calAddEventBtn').onclick = ()=>openTaskModal(null);
+greet();
+
+/* ================= GLOBAL SEARCH ================= */
+document.getElementById('globalSearch').addEventListener('input', e=>{
+  const q = e.target.value.trim().toLowerCase();
+  const wrap = document.getElementById('searchResultsWrap');
+  if(!q){ wrap.innerHTML=''; return; }
+  const tHits = tasks.filter(t=>(t.title+t.memo).toLowerCase().includes(q) || (clientById(t.clientId)?.name||'').toLowerCase().includes(q));
+  const iHits = invoices.filter(i=>i.number.toLowerCase().includes(q));
+  const rHits = receipts.filter(r=>(r.vendor+(r.memo||'')).toLowerCase().includes(q));
+  if(!tHits.length && !iHits.length && !rHits.length){ wrap.innerHTML='<div class="card empty">검색 결과가 없어요.</div>'; return; }
+  wrap.innerHTML = `<div class="card">
+    ${tHits.length?`<div style="font-size:11px;color:var(--ink-soft);margin-bottom:6px;">업무/할일</div>`+tHits.slice(0,5).map(t=>`<div style="padding:4px 0;font-size:12.5px;">${escapeHtml(t.title)} · ${clientById(t.clientId)?.name||''}</div>`).join(''):''}
+    ${iHits.length?`<div style="font-size:11px;color:var(--ink-soft);margin:8px 0 6px;">인보이스</div>`+iHits.slice(0,5).map(i=>`<div style="padding:4px 0;font-size:12.5px;">${escapeHtml(i.number)} · ${clientById(i.clientId)?.name||''}</div>`).join(''):''}
+    ${rHits.length?`<div style="font-size:11px;color:var(--ink-soft);margin:8px 0 6px;">영수증</div>`+rHits.slice(0,5).map(r=>`<div style="padding:4px 0;font-size:12.5px;">${escapeHtml(r.vendor)} · ${r.date}</div>`).join(''):''}
+  </div>`;
+});
+
+/* ================= RENDER ALL ================= */
+function renderAll(){
+  renderDashboard();
+  renderTaskList();
+  renderWorklog();
+  renderIncome();
+  renderInvoiceClientSelect();
+  renderSavedInvoices();
+  renderReceipts();
+  renderClients();
+  fillSettingsForm();
+}
+['taskFilterStatus','taskFilterUrgent','taskSort'].forEach(id=>document.getElementById(id).onchange=renderTaskList);
+
+loadAll();
+</script>
+</body>
+</html>
