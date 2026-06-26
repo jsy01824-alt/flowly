@@ -105,6 +105,18 @@
   .wl-row .cell-title{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .wl-row .cell-title:hover{ text-decoration:underline; }
   .actions-cell{ display:flex; justify-content:flex-end; gap:14px; align-items:center; }
+  /* Tasks table — same visual system as Work Log */
+  .task-head, .task-row{ display:grid; grid-template-columns:1.7fr 120px 80px 100px 110px 130px 130px 90px; align-items:center; column-gap:12px; padding:0 6px; }
+  .task-head{ color:var(--ink-soft); font-size:12px; text-transform:uppercase; letter-spacing:.4px; padding-bottom:10px; border-bottom:1px solid var(--line); }
+  .task-row{ min-height:56px; border-bottom:1px solid var(--line); font-size:13.5px; }
+  .task-row:hover{ background:var(--panel2); }
+  .task-row:last-child{ border-bottom:none; }
+  .task-row .cell-num{ text-align:right; }
+  .task-row select.chip{ min-width:0; width:100%; height:30px; padding:3px 8px; font-size:12px; }
+  @media (max-width:900px){
+    .task-head{ display:none; }
+    .task-row{ grid-template-columns:1fr; grid-auto-rows:auto; row-gap:4px; padding:12px 6px; }
+  }
   @media (max-width:900px){
     .wl-head{ display:none; }
     .wl-row{ grid-template-columns:1fr; grid-auto-rows:auto; row-gap:4px; padding:12px 6px; }
@@ -160,12 +172,12 @@
   .cal-title{ background:var(--accent); color:#fff; font-size:12px; font-weight:600; padding:6px 16px; border-radius:999px; }
   .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; text-align:center; font-size:11.5px; }
   .cal-grid .dow{ color:var(--ink-soft); font-weight:600; padding-bottom:6px; font-size:10.5px; }
-  .cal-grid .day{ aspect-ratio:1/1; display:flex; align-items:center; justify-content:center; border-radius:50%; color:var(--ink); background:transparent; font-size:12px; cursor:pointer; }
-  .cal-grid .day:hover{ background:var(--panel2); }
+  .cal-grid .day{ display:flex; align-items:center; justify-content:center; color:var(--ink); background:transparent; font-size:12px; cursor:pointer; padding:5px 0; }
+  .cal-grid .day:hover{ color:var(--ink); opacity:.55; }
   .cal-grid .day.muted{ color:#D3D6DB; cursor:default; }
-  .cal-grid .day.muted:hover{ background:transparent; }
-  .cal-grid .day.today{ background:var(--accent); color:#fff; font-weight:700; }
-  .cal-grid .day.has:not(.today){ box-shadow:inset 0 -3px 0 var(--blob); }
+  .cal-grid .day.muted:hover{ opacity:1; }
+  .cal-grid .day.today{ aspect-ratio:1/1; background:var(--accent); color:#fff; font-weight:700; border-radius:50%; opacity:1; }
+  .cal-grid .day.has:not(.today){ font-weight:600; }
   .cal-addevent{ width:100%; margin-top:14px; background:var(--accent); color:#fff; border:none; border-radius:999px; padding:11px 0; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
   .stat{ margin-bottom:8px; } .stat b{ font-size:18px; display:block; } .stat span{ font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.5px; }
   .diff{ font-size:12px; font-weight:600; padding:3px 9px; border-radius:20px; display:inline-block; margin-top:6px; }
@@ -886,32 +898,35 @@ function renderTaskList(){
   const wrap = document.getElementById('taskListWrap');
   if(!list.length){ wrap.innerHTML='<div class="empty">할 일이 없어요.</div>'; return; }
   const isDueSoon = d => d && (new Date(d) - new Date(todayStr())) <= 86400000*2 && (new Date(d) - new Date(todayStr())) >= -86400000*365;
-  wrap.innerHTML = `<table><thead><tr><th>제목</th><th>클라이언트</th><th>중요도</th><th>마감일</th><th>상태</th><th>결제상태</th><th class="right">견적</th><th></th></tr></thead><tbody>
-  ${list.map(t=>{
-    const c = clientById(t.clientId);
-    return `<tr data-id="${t.id}">
-      <td><b>${escapeHtml(t.title)}</b>${t.memo?`<div style="color:var(--ink-soft);font-size:11px;">${escapeHtml(t.memo)}</div>`:''}</td>
-      <td>${c?escapeHtml(c.name):'-'}</td>
-      <td><span class="badge ${t.priority}">${priorityLabel(t.priority)}</span></td>
-      <td style="${isDueSoon(t.dueDate)&&t.status!=='done'?'color:var(--bad);font-weight:600;':''}">${t.dueDate||'-'}</td>
-      <td><select class="chip statusSel" style="padding:4px 8px;font-size:11px;">
-        ${['todo','doing','done'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${statusLabel(s)}</option>`).join('')}
-      </select></td>
-      <td>${t.billingModel==='salary'
-        ? `<span class="badge salary">월급 포함</span>`
-        : t.billingModel==='project'
-        ? `<span class="badge salary">프로젝트 연결</span>`
-        : `<select class="chip paySel" style="padding:4px 8px;font-size:11px;">${['unbilled','billed','partial','paid'].map(p=>`<option value="${p}" ${t.paymentStatus===p?'selected':''}>${payLabel(p)}</option>`).join('')}</select>`
-      }</td>
-      <td class="right">${fmt(t.estimateAmount, t.currency)}${remaining(t)>0?`<div style="color:var(--bad);font-size:10.5px;">미수 ${fmt(remaining(t),t.currency)}</div>`:''}</td>
-      <td class="row-flex"><button class="iconbtn-sm editBtn">수정</button><button class="iconbtn-sm delBtn" style="color:var(--bad)">삭제</button></td>
-    </tr>`;
-  }).join('')}</tbody></table>`;
-  wrap.querySelectorAll('tr').forEach(row=>{
+  wrap.innerHTML = `
+    <div class="task-head">
+      <div>제목</div><div>클라이언트</div><div>중요도</div><div>마감일</div><div>상태</div><div>결제상태</div><div class="cell-num">견적</div><div></div>
+    </div>
+    ${list.map(t=>{
+      const c=clientById(t.clientId);
+      return `<div class="task-row" data-id="${t.id}">
+        <div><b style="font-size:13.5px;">${escapeHtml(t.title)}</b>${t.memo?`<div style="color:var(--ink-soft);font-size:11px;margin-top:2px;">${escapeHtml(t.memo)}</div>`:''}</div>
+        <div style="font-size:13.5px;">${c?escapeHtml(c.name):'-'}</div>
+        <div><span class="badge ${t.priority}">${priorityLabel(t.priority)}</span></div>
+        <div style="font-size:13px;${isDueSoon(t.dueDate)&&t.status!=='done'?'color:var(--bad);font-weight:600;':''}">${t.dueDate||'-'}</div>
+        <div><select class="chip statusSel">
+          ${['todo','doing','done'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${statusLabel(s)}</option>`).join('')}
+        </select></div>
+        <div>${t.billingModel==='salary'
+          ? `<span class="badge salary">월급 포함</span>`
+          : t.billingModel==='project'
+          ? `<span class="badge salary">프로젝트 연결</span>`
+          : `<select class="chip paySel">${['unbilled','billed','partial','paid'].map(p=>`<option value="${p}" ${t.paymentStatus===p?'selected':''}>${payLabel(p)}</option>`).join('')}</select>`
+        }</div>
+        <div class="cell-num">${fmt(t.estimateAmount,t.currency)}${remaining(t)>0?`<div style="color:var(--bad);font-size:10.5px;">미수 ${fmt(remaining(t),t.currency)}</div>`:''}</div>
+        <div class="actions-cell"><button class="iconbtn-sm editBtn">수정</button><button class="iconbtn-sm delBtn" style="color:var(--bad)">삭제</button></div>
+      </div>`;
+    }).join('')}`;
+  wrap.querySelectorAll('.task-row').forEach(row=>{
     const id=row.dataset.id; if(!id) return;
-    const t = tasks.find(x=>x.id===id);
+    const t=tasks.find(x=>x.id===id);
     row.querySelector('.statusSel').onchange = e=>setTaskStatus(id, e.target.value);
-    const paySel = row.querySelector('.paySel');
+    const paySel=row.querySelector('.paySel');
     if(paySel) paySel.onchange = e=>setTaskPay(id, e.target.value);
     row.querySelector('.editBtn').onclick = ()=>openTaskModal(t);
     row.querySelector('.delBtn').onclick = ()=>deleteTask(id);
@@ -1139,11 +1154,40 @@ function renderIncomeHistory(){
   });
 }
 
+function openSalaryEditModal(inc){
+  const html = `
+    <div class="field-row">
+      <div class="field"><label>날짜 *</label><input type="date" id="m-sl-date" value="${inc.date||todayStr()}"></div>
+      <div class="field"><label>제목 *</label><input id="m-sl-title" value="${escapeHtml(inc.title||'')}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>금액 *</label><input type="number" id="m-sl-amount" value="${inc.amount||''}"></div>
+      <div class="field"><label>통화</label><select id="m-sl-currency">${['KRW','CAD','USD'].map(c=>`<option ${inc.currency===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>반복</label><select id="m-sl-repeat"><option value="">반복 없음</option><option value="monthly" ${inc.repeat==='monthly'?'selected':''}>매월 반복</option></select></div>
+      <div class="field"><label>메모</label><input id="m-sl-memo" value="${escapeHtml(inc.memo||'')}"></div>
+    </div>`;
+  openModal('월급 수정', html, async ()=>{
+    const title=document.getElementById('m-sl-title').value.trim();
+    const amount=parseFloat(document.getElementById('m-sl-amount').value);
+    const date=document.getElementById('m-sl-date').value;
+    if(!title||!amount||!date){ toast('필수 항목을 입력해주세요.'); return; }
+    inc.title=title; inc.amount=amount; inc.date=date;
+    inc.currency=document.getElementById('m-sl-currency').value;
+    inc.repeat=document.getElementById('m-sl-repeat').value;
+    inc.memo=document.getElementById('m-sl-memo').value.trim();
+    await saveIncomes();
+    toast('수정되었습니다.');
+    closeModal();
+    renderSettlement();
+  });
+}
+
 function renderSettlement(){
   const monthKey = todayStr().slice(0,7);
   const thisMonth = incomes.filter(x=>(x.date||'').slice(0,7)===monthKey);
 
-  // monthly summary
   const sumBy=(list,type,cur)=>list.filter(x=>x.sourceType===type&&x.currency===cur).reduce((s,x)=>s+Number(x.amount||0),0);
   const totalKRW=thisMonth.filter(x=>x.currency==='KRW').reduce((s,x)=>s+Number(x.amount||0),0);
   const totalCAD=thisMonth.filter(x=>x.currency==='CAD').reduce((s,x)=>s+Number(x.amount||0),0);
@@ -1177,7 +1221,7 @@ function renderSettlement(){
       <td class="right">${fmt(x.amount,x.currency)}</td><td>${x.currency}</td>
       <td>${x.repeat==='monthly'?'매월 반복':'없음'}</td>
       <td>${escapeHtml(x.memo||'-')}</td>
-      <td><button class="iconbtn-sm salaryDelBtn" style="color:var(--bad)">삭제</button></td>
+      <td class="row-flex"><button class="iconbtn-sm salaryEditBtn">수정</button><button class="iconbtn-sm salaryDelBtn" style="color:var(--bad)">삭제</button></td>
     </tr>`).join('')}</tbody></table>`;
   }
   html += `</div>`;
@@ -1188,18 +1232,19 @@ function renderSettlement(){
   if(!perTaskItems.length){
     html += `<div class="empty">건별 외주 업무가 없어요.</div>`;
   } else {
-    const payStatusLabel={unbilled:'미청구',billed:'청구됨',partial:'일부 입금',paid:'완료'};
-    html += `<table><thead><tr><th>클라이언트</th><th>업무명</th><th class="right">견적</th><th class="right">받은 금액</th><th class="right">미수금</th><th>상태</th><th>날짜</th></tr></thead><tbody>
+    const psLabel={unbilled:'미청구',billed:'청구됨',partial:'일부 입금',paid:'완료'};
+    html += `<table><thead><tr><th>클라이언트</th><th>업무명</th><th class="right">견적</th><th class="right">받은 금액</th><th class="right">미수금</th><th>상태</th><th>날짜</th><th></th></tr></thead><tbody>
     ${perTaskItems.map(t=>{
       const c=clientById(t.clientId);
       const est=Number(t.estimateAmount||0), rec=Number(t.receivedAmount||0), rem=Math.max(0,est-rec);
-      return `<tr>
+      return `<tr data-tid="${t.id}">
         <td>${escapeHtml(c?c.name:'-')}</td><td>${escapeHtml(t.title)}</td>
         <td class="right">${fmt(est,t.currency)}</td>
         <td class="right">${fmt(rec,t.currency)}</td>
         <td class="right" style="color:${rem>0?'var(--bad)':'var(--good)'};">${rem>0?fmt(rem,t.currency):'✓'}</td>
-        <td><span class="badge ${t.paymentStatus}">${payStatusLabel[t.paymentStatus]||t.paymentStatus}</span></td>
+        <td><span class="badge ${t.paymentStatus}">${psLabel[t.paymentStatus]||t.paymentStatus}</span></td>
         <td>${t.date||'-'}</td>
+        <td><button class="iconbtn-sm ptEditBtn">수정</button></td>
       </tr>`;
     }).join('')}</tbody></table>`;
   }
@@ -1209,26 +1254,29 @@ function renderSettlement(){
   html += `<h3 style="font-size:14px;margin:0 0 10px;color:var(--ink-soft);">프로젝트 계약 정산</h3>
   <div id="projectSettlementWrap">`;
   if(!projectItems.length){
-    html += `<div class="card"><div class="empty">프로젝트 계약이 없어요. 클라이언트에서 프로젝트 계약 유형으로 등록해주세요.</div></div>`;
+    html += `<div class="card"><div class="empty">프로젝트 계약이 없어요.</div></div>`;
   } else {
     html += projectItems.map(p=>{
       const c=clientById(p.clientId);
       const plan=Array.isArray(p.paymentPlan)?p.paymentPlan:[];
       const totalPaid=plan.filter(m=>m.status==='입금완료').reduce((s,m)=>s+Number(m.amount||0),0);
       const totalAmount=Number(p.totalAmount||0);
-      const remaining=totalAmount-totalPaid;
+      const rem=totalAmount-totalPaid;
       return `<div class="card" style="margin-bottom:12px;" data-pid="${p.id}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
           <div><b style="font-size:14px;">${escapeHtml(p.title)}</b><div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${escapeHtml(c?c.name:'-')} · ${p.currency}</div></div>
-          <div style="text-align:right;"><div style="font-size:11px;color:var(--ink-soft);">총 계약금</div><div style="font-weight:700;">${fmt(totalAmount,p.currency)}</div></div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="text-align:right;"><div style="font-size:11px;color:var(--ink-soft);">총 계약금</div><div style="font-weight:700;">${fmt(totalAmount,p.currency)}</div></div>
+            <button class="iconbtn-sm projEditBtn">수정</button>
+          </div>
         </div>
         <div style="display:flex;gap:16px;margin-bottom:12px;font-size:13px;">
           <span>받은 금액 <b>${fmt(totalPaid,p.currency)}</b></span>
-          <span style="color:${remaining>0?'var(--bad)':'var(--good)'};">남은 금액 <b>${remaining>0?fmt(remaining,p.currency):'완납 ✓'}</b></span>
+          <span style="color:${rem>0?'var(--bad)':'var(--good)'};">남은 금액 <b>${rem>0?fmt(rem,p.currency):'완납 ✓'}</b></span>
         </div>
         ${plan.length?`<div style="border-top:1px solid var(--line);padding-top:10px;">
           ${plan.map(m=>`<div class="row-flex" style="margin-bottom:8px;font-size:13px;" data-mid="${m.id}">
-            <span style="flex:1;">${escapeHtml(m.label)} <span style="color:var(--ink-soft);">${m.dueDate?`(${m.dueDate})`:''}  ${fmt(Number(m.amount||0),p.currency)}</span></span>
+            <span style="flex:1;">${escapeHtml(m.label)} <span style="color:var(--ink-soft);">${m.dueDate?`(${m.dueDate}) `:''} ${fmt(Number(m.amount||0),p.currency)}</span></span>
             <span class="badge ${m.status==='입금완료'?'paid':m.status==='미청구'?'unbilled':'billed'}" style="margin-right:8px;">${m.status}</span>
             ${m.status!=='입금완료'?`<button class="btn sm light msMarkPaidBtn" style="font-size:11px;padding:0 10px;height:28px;">입금완료</button>`:'<span style="font-size:11px;color:var(--good);padding:0 10px;">✓ 완료</span>'}
           </div>`).join('')}
@@ -1240,6 +1288,15 @@ function renderSettlement(){
 
   document.getElementById('settlementWrap').innerHTML = html;
 
+  // salary edit buttons
+  document.querySelectorAll('.salaryEditBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const id=btn.closest('tr').dataset.id;
+      const inc=incomes.find(x=>x.id===id);
+      if(inc) openSalaryEditModal(inc);
+    };
+  });
+
   // salary delete buttons
   document.querySelectorAll('.salaryDelBtn').forEach(btn=>{
     btn.onclick=async()=>{
@@ -1249,6 +1306,24 @@ function renderSettlement(){
       await saveIncomes();
       toast('삭제되었습니다.');
       renderSettlement();
+    };
+  });
+
+  // per-task edit buttons
+  document.querySelectorAll('.ptEditBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const tid=btn.closest('tr').dataset.tid;
+      const t=tasks.find(x=>x.id===tid);
+      if(t){ openTaskModal(t); }
+    };
+  });
+
+  // project edit buttons
+  document.querySelectorAll('.projEditBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const pid=btn.closest('[data-pid]').dataset.pid;
+      const p=projects.find(x=>x.id===pid);
+      if(p) openProjectModal(p);
     };
   });
 
@@ -1267,7 +1342,6 @@ function renderSettlement(){
       ms.status='입금완료';
       ms.paidDate=todayStr();
       await saveProjects();
-      // add income record if not already there
       const alreadyIn=incomes.find(x=>x.milestoneId===mid);
       if(!alreadyIn){
         const c=clientById(proj.clientId);
@@ -1280,10 +1354,8 @@ function renderSettlement(){
           date:todayStr(),repeat:'',memo:'',createdAt:Date.now()
         });
         await saveIncomes();
-        toast(`${ms.label} 입금완료 처리되었습니다.`);
-      } else {
-        toast(`${ms.label} 입금완료 처리되었습니다.`);
       }
+      toast(`${ms.label} 입금완료 처리되었습니다.`);
       renderSettlement();
     };
   });
