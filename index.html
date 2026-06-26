@@ -220,7 +220,6 @@
     <div class="nav-item" data-tab="invoices">$ Invoices · 인보이스</div>
     <div class="nav-item" data-tab="receipts">▣ Receipts · 영수증</div>
     <div class="nav-item" data-tab="clients">◎ Clients · 클라이언트</div>
-    <div class="nav-item" data-tab="projects">▣ Projects · 프로젝트</div>
     <div class="nav-item" data-tab="settings">⚙ Settings · 설정</div>
   </div>
 
@@ -451,44 +450,46 @@ let settings={ brand:'', email:'', phone:'', defaultCurrency:'KRW',
   memoKR:'입금 후 회신 부탁드립니다.', memoEN:'Thank you for your business!', taxRate:10, goal:0 };
 let invoiceCounter=1;
 const SYMS={KRW:'₩',CAD:'$',USD:'$'};
-// two storage keys: CORE (small structured data, saved on almost every action)
-// and RECEIPTS (kept separate because receipt images/base64 can get large — isolating
-// them means a big receipt image can never block saving a task/invoice/project edit).
-const CORE_KEY = 'flowly-core-v3';
-const RECEIPTS_KEY = 'flowly-receipts-v3';
+// individual localStorage keys per entity
+const KEY_CLIENTS   = 'flowly_clients';
+const KEY_TASKS     = 'flowly_tasks';
+const KEY_INVOICES  = 'flowly_invoices';
+const KEY_CATEGORIES= 'flowly_categories';
+const KEY_INCOMES   = 'flowly_income';
+const KEY_PROJECTS  = 'flowly_projects';
+const KEY_SETTINGS  = 'flowly_settings';
+const KEY_COUNTER   = 'flowly_invoiceCounter';
+const KEY_WORKLOGS  = 'flowly_workLogs';
+const KEY_RECEIPTS  = 'flowly_receipts';
 
-// ---- safe storage helper: retry once with backoff, never throws, never blocks UI ----
-async function storageGet(key){
+function storageGet(key){
   try{
-    const r = await window.storage.get(key);
-    return r ? JSON.parse(r.value) : null;
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : null;
   }catch(e){
     console.error('Storage get failed:', key, e);
     return null;
   }
 }
-async function storageSet(key, obj){
-  for(let attempt=0; attempt<2; attempt++){
-    try{
-      await window.storage.set(key, JSON.stringify(obj));
-      return true;
-    }catch(e){
-      console.error('Storage set failed:', key, e, 'attempt', attempt+1);
-      if(attempt===1) return false;
-      await new Promise(r=>setTimeout(r, 500));
-    }
+function storageSet(key, obj){
+  try{
+    localStorage.setItem(key, JSON.stringify(obj));
+    return true;
+  }catch(e){
+    console.error('Storage set failed:', key, e);
+    return false;
   }
-  return false;
 }
-async function persistCore(){
-  const ok = await storageSet(CORE_KEY, { clients, tasks, invoices, categories, incomes, projects, settings, invoiceCounter });
-  if(!ok) toast('저장 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.');
-  return ok;
-}
-async function persistReceipts(){
-  const ok = await storageSet(RECEIPTS_KEY, receipts);
-  if(!ok) toast('영수증 저장 중 문제가 발생했어요. 이미지 용량이 너무 크면 줄여서 다시 시도해주세요.');
-  return ok;
+function persistClients(){ if(!storageSet(KEY_CLIENTS, clients)){ toast('저장 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.'); return false; } return true; }
+function persistTasks(){ if(!storageSet(KEY_TASKS, tasks)){ toast('저장 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.'); return false; } return true; }
+function persistInvoices(){ if(!storageSet(KEY_INVOICES, invoices)){ toast('저장 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.'); return false; } return true; }
+function persistCategories(){ if(!storageSet(KEY_CATEGORIES, categories)){ toast('저장 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.'); return false; } return true; }
+function persistIncomes(){ if(!storageSet(KEY_INCOMES, incomes)){ toast('저장 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.'); return false; } return true; }
+function persistProjects(){ if(!storageSet(KEY_PROJECTS, projects)){ toast('저장 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.'); return false; } return true; }
+function persistSettings(){ if(!storageSet(KEY_SETTINGS, settings) || !storageSet(KEY_COUNTER, invoiceCounter)){ toast('저장 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.'); return false; } return true; }
+function persistReceipts(){
+  try{ localStorage.setItem(KEY_RECEIPTS, JSON.stringify(receipts)); return true; }
+  catch(e){ toast('영수증 저장 중 문제가 발생했어요. 이미지 용량이 너무 크면 줄여서 다시 시도해주세요.'); return false; }
 }
 
 function toast(msg){
@@ -537,46 +538,54 @@ function compressImageFile(file, maxDim=900, quality=0.6){
 function billingModelLabel(b){ return {salary:'월급 포함', per_task:'건별 외주', project:'프로젝트 계약'}[b]||b; }
 function sourceTypeLabel(s){ return {salary:'월급', per_task:'건별 외주', project_milestone:'프로젝트 지급', reimbursement:'비용 정산', other:'기타 수입'}[s]||s; }
 
-async function migrateFromV2OrLegacy(){
-  // v2 single-blob version
-  try{
-    const r = await window.storage.get('flowly-data-v2');
-    if(r && r.value){
-      const d = JSON.parse(r.value);
-      return {
-        clients:d.clients||[], tasks:d.tasks||[], receipts:d.receipts||[], invoices:d.invoices||[],
-        categories:d.categories||[], incomes:d.salaryIncomes||[], projects:[], settings:d.settings||settings, invoiceCounter:d.invoiceCounter||1
-      };
-    }
-  }catch(e){ /* not present */ }
-  // even older multi-key version
-  const legacyKeys = ['flowly-clients','flowly-tasks','flowly-receipts','flowly-invoices','flowly-categories','flowly-invoice-counter','flowly-settings'];
-  let found=false; const out={};
-  for(const k of legacyKeys){
-    try{ const r = await window.storage.get(k); if(r && r.value!=null){ out[k]=JSON.parse(r.value); found=true; } }catch(e){}
-  }
-  if(!found) return null;
-  return {
-    clients:out['flowly-clients']||[], tasks:out['flowly-tasks']||[], receipts:out['flowly-receipts']||[],
-    invoices:out['flowly-invoices']||[], categories:out['flowly-categories']||[], incomes:[], projects:[],
-    settings:out['flowly-settings']||settings, invoiceCounter:out['flowly-invoice-counter']||1
-  };
-}
 
-async function loadAll(){
-  let core = await storageGet(CORE_KEY);
-  let migratedReceipts = null;
+function loadAll(){
+  // try loading from individual keys first
+  const storedClients = storageGet(KEY_CLIENTS);
 
-  if(core === null){
-    const migrated = await migrateFromV2OrLegacy();
+  if(storedClients === null){
+    // try migration from v2 or legacy (async path — just run synchronously via localStorage)
+    const migrated = (()=>{
+      try{
+        const v = localStorage.getItem('flowly-data-v2');
+        if(v){
+          const d = JSON.parse(v);
+          return {
+            clients:d.clients||[], tasks:d.tasks||[], receipts:d.receipts||[], invoices:d.invoices||[],
+            categories:d.categories||[], incomes:d.salaryIncomes||[], projects:[], settings:d.settings||settings, invoiceCounter:d.invoiceCounter||1
+          };
+        }
+      }catch(e){}
+      // try flowly-core-v3
+      try{
+        const v = localStorage.getItem('flowly-core-v3');
+        if(v){
+          const d = JSON.parse(v);
+          return {
+            clients:d.clients||[], tasks:d.tasks||[], receipts:[], invoices:d.invoices||[],
+            categories:d.categories||[], incomes:d.incomes||[], projects:d.projects||[], settings:d.settings||settings, invoiceCounter:d.invoiceCounter||1
+          };
+        }
+      }catch(e){}
+      return null;
+    })();
+
     if(migrated){
-      core = { clients:migrated.clients, tasks:migrated.tasks, invoices:migrated.invoices, categories:migrated.categories,
-        incomes:migrated.incomes, projects:migrated.projects, settings:migrated.settings, invoiceCounter:migrated.invoiceCounter };
-      migratedReceipts = migrated.receipts;
+      clients = migrated.clients; tasks = migrated.tasks; invoices = migrated.invoices;
+      categories = migrated.categories; incomes = migrated.incomes; projects = migrated.projects;
+      settings = migrated.settings; invoiceCounter = migrated.invoiceCounter;
+      receipts = storageGet(KEY_RECEIPTS) || migrated.receipts || [];
+      // backfill billingModel
+      clients.forEach(c=>{ if(!c.billingModel){ c.billingModel = c.billingType==='salary_included'?'salary':'per_task'; } });
+      tasks.forEach(t=>{ if(!t.billingModel){ t.billingModel = t.billingType==='salary_included'?'salary':'per_task'; } });
+      // save to new individual keys
+      persistClients(); persistTasks(); persistInvoices(); persistCategories();
+      persistIncomes(); persistProjects(); persistSettings(); persistReceipts();
+      renderAll(); return;
     }
   }
 
-  if(core === null){
+  if(storedClients === null){
     // truly first-ever load: nothing saved anywhere -> inject sample data once
     clients = [
       {id:'c_company', name:'회사 재택', companyName:'회사 재택', email:'', phone:'', country:'KR', currency:'KRW', category:'회사 월급', billingModel:'salary', memo:''},
@@ -608,46 +617,36 @@ async function loadAll(){
       {id:uid('inc'), sourceType:'project_milestone', categoryId:null, categoryName:'SULDOK', title:'SULDOK 브랜드 웹사이트 - 선금', clientId:'c_suldok', clientName:'SULDOK', projectId:'p_suldok_web', taskId:null, milestoneId:projects[0].paymentPlan[0].id, amount:1000000, currency:'KRW', date:d, repeat:'', memo:'', createdAt:Date.now()},
     ];
     receipts=[]; invoices=[]; invoiceCounter=1;
-    await persistCore(); await persistReceipts();
+    persistClients(); persistTasks(); persistInvoices(); persistCategories();
+    persistIncomes(); persistProjects(); persistSettings(); persistReceipts();
   } else {
-    clients = Array.isArray(core.clients) ? core.clients : [];
-    tasks = Array.isArray(core.tasks) ? core.tasks : [];
-    invoices = Array.isArray(core.invoices) ? core.invoices : [];
-    categories = Array.isArray(core.categories) ? core.categories : [];
-    incomes = Array.isArray(core.incomes) ? core.incomes : [];
-    projects = Array.isArray(core.projects) ? core.projects : [];
-    settings = core.settings || settings;
-    invoiceCounter = core.invoiceCounter || 1;
-
-    if(migratedReceipts !== null){
-      receipts = migratedReceipts;
-      await persistReceipts();
-    } else {
-      const r = await storageGet(RECEIPTS_KEY);
-      receipts = Array.isArray(r) ? r : [];
-    }
-    await persistCore(); // write once under the new key so future loads skip migration
+    // load from individual keys
+    clients = storedClients || [];
+    tasks = storageGet(KEY_TASKS) || [];
+    invoices = storageGet(KEY_INVOICES) || [];
+    categories = storageGet(KEY_CATEGORIES) || [];
+    incomes = storageGet(KEY_INCOMES) || [];
+    projects = storageGet(KEY_PROJECTS) || [];
+    receipts = storageGet(KEY_RECEIPTS) || [];
+    const savedSettings = storageGet(KEY_SETTINGS);
+    if(savedSettings) settings = savedSettings;
+    invoiceCounter = storageGet(KEY_COUNTER) || 1;
 
     // backfill: convert any old billingType field to the new billingModel scheme
-    clients.forEach(c=>{
-      if(!c.billingModel){ c.billingModel = c.billingType==='salary_included' ? 'salary' : 'per_task'; }
-    });
-    tasks.forEach(t=>{
-      if(!t.billingModel){ t.billingModel = t.billingType==='salary_included' ? 'salary' : 'per_task'; }
-    });
+    clients.forEach(c=>{ if(!c.billingModel){ c.billingModel = c.billingType==='salary_included'?'salary':'per_task'; } });
+    tasks.forEach(t=>{ if(!t.billingModel){ t.billingModel = t.billingType==='salary_included'?'salary':'per_task'; } });
   }
   renderAll();
 }
-// every mutation calls one of these two (core vs receipts) — never more than one storage.set per action
-async function saveTasks(){ return persistCore(); }
-async function saveClients(){ return persistCore(); }
-async function saveReceipts(){ return persistReceipts(); }
-async function saveInvoices(){ return persistCore(); }
-async function saveCategories(){ return persistCore(); }
-async function saveSettings(){ return persistCore(); }
-async function saveCounter(){ return persistCore(); }
-async function saveIncomes(){ return persistCore(); }
-async function saveProjects(){ return persistCore(); }
+function saveTasks(){ return persistTasks(); }
+function saveClients(){ return persistClients(); }
+function saveReceipts(){ return persistReceipts(); }
+function saveInvoices(){ return persistInvoices(); }
+function saveCategories(){ return persistCategories(); }
+function saveSettings(){ return persistSettings(); }
+function saveCounter(){ return storageSet(KEY_COUNTER, invoiceCounter); }
+function saveIncomes(){ return persistIncomes(); }
+function saveProjects(){ return persistProjects(); }
 
 /* ================= NAV ================= */
 document.querySelectorAll('[data-tab]').forEach(el=>{
@@ -1569,8 +1568,9 @@ function openClientModal(existing){
     <div class="field-row">
       <div class="field"><label>카테고리</label><select id="m-category">${categories.map(cat=>`<option ${c.category===cat.name?'selected':''}>${escapeHtml(cat.name)}</option>`).join('')}</select></div>
       <div class="field"><label>기본 청구 방식 *</label><select id="m-billmodel">
-        <option value="per_task" ${(c.billingModel||'per_task')==='per_task'?'selected':''}>건별 외주 (건별 인보이스)</option>
-        <option value="salary" ${c.billingModel==='salary'?'selected':''}>월급 포함 (회사/재택)</option>
+        <option value="salary" ${c.billingModel==='salary'?'selected':''}>재택 / 월급 포함</option>
+        <option value="per_task" ${(!c.billingModel||c.billingModel==='per_task')?'selected':''}>건별 외주 / 건별 인보이스</option>
+        <option value="project" ${c.billingModel==='project'?'selected':''}>프로젝트 계약 / 선금·중도금·잔금</option>
       </select></div>
     </div>
     <div class="field"><label>메모</label><input id="m-memo" value="${escapeHtml(c.memo||'')}"></div>
@@ -1600,7 +1600,7 @@ function renderClients(){
       <div class="row-flex" style="margin-bottom:12px;">
         <div style="width:34px;height:34px;border-radius:50%;background:${clientColor(c.name)};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none;">${c.name[0]}</div>
         <div style="flex:1;"><b style="font-size:14px;">${escapeHtml(c.name)}</b><div style="font-size:11px;color:var(--ink-soft);margin-top:3px;">${c.country==='KR'?'🇰🇷 한국':'🇨🇦 Canada'} · ${c.currency} · ${escapeHtml(c.category||'-')}</div></div>
-        <span class="badge ${c.billingModel==='salary'?'salary':'billed'}" style="flex:none;">${c.billingModel==='salary'?'월급 포함':'건별 외주'}</span>
+        <span class="badge ${c.billingModel==='salary'?'salary':c.billingModel==='project'?'project':'billed'}" style="flex:none;">${billingModelLabel(c.billingModel||'per_task')}</span>
       </div>
       <div class="stat-sub" style="line-height:1.7;">업무 ${cTasks.length}건<br>수입 ${fmt(totalIncome,c.currency)}${c.billingModel!=='salary'?`<br>미수금 ${fmt(unpaid,c.currency)}`:''}</div>
       ${c.email?`<div class="stat-sub" style="margin-top:4px;">${escapeHtml(c.email)}</div>`:''}
@@ -1803,10 +1803,9 @@ document.getElementById('exportCsvBtn').onclick = ()=>{
   const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='flowly_income.csv'; a.click();
   toast('CSV가 다운로드되었습니다.');
 };
-document.getElementById('resetDataBtn').onclick = async ()=>{
+document.getElementById('resetDataBtn').onclick = ()=>{
   if(!confirm('정말 모든 데이터를 초기화할까요? 되돌릴 수 없습니다.')) return;
-  try{ await window.storage.delete(CORE_KEY); }catch(e){ console.error('reset delete failed', e); }
-  try{ await window.storage.delete(RECEIPTS_KEY); }catch(e){ console.error('reset delete failed', e); }
+  [KEY_CLIENTS,KEY_TASKS,KEY_INVOICES,KEY_CATEGORIES,KEY_INCOMES,KEY_PROJECTS,KEY_SETTINGS,KEY_COUNTER,KEY_RECEIPTS,KEY_WORKLOGS].forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   toast('데이터가 초기화되었습니다. 새로고침합니다.');
   setTimeout(()=>location.reload(), 800);
 };
