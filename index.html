@@ -2247,8 +2247,8 @@ function renderDashboard(){
     let path = `M ${pts[0][0]} ${pts[0][1]}`;
     for(let i=0;i<pts.length-1;i++){
       const [x0,y0]=pts[i], [x1,y1]=pts[i+1];
-      const cp = (x1-x0)*0.4;
-      path += ` C ${x0+cp} ${y0} ${x1-cp} ${y1} ${x1} ${y1}`;
+      const cx=(x0+x1)/2;
+      path += ` Q ${cx} ${y0}, ${cx} ${(y0+y1)/2} Q ${cx} ${y1}, ${x1} ${y1}`;
     }
     const areaPath = path + ` L ${pts[n-1][0]} ${H} L ${pts[0][0]} ${H} Z`;
     const last = pts[n-1];
@@ -2276,15 +2276,14 @@ function renderDashboard(){
   const totalT = tasks.length || 0;
   const pDone = totalT ? Math.round(counts.done / totalT * 100) : 0;
   document.getElementById('taskStat').innerHTML = `
-    <div class="row-flex" style="gap:0;margin-top:20px;margin-bottom:22px;">
+    <div class="row-flex" style="gap:0;margin-bottom:10px;">
       <div class="stat" style="flex:1;text-align:center;"><b>${counts.todo}</b><span>할 일</span></div>
       <div class="stat" style="flex:1;text-align:center;"><b>${counts.doing}</b><span>진행중</span></div>
       <div class="stat" style="flex:1;text-align:center;"><b>${counts.done}</b><span>완료</span></div>
     </div>
     <div class="progressline">
       <i style="width:${pDone}%;background:#111111;border-radius:4px;"></i>
-    </div>
-    <div style="font-size:11px;color:var(--ink-soft);margin-top:7px;text-align:right;">완료율 ${pDone}%</div>`;
+    </div>`;
 
   // recent entries (worklog)
   const recent = tasks.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);
