@@ -1188,9 +1188,21 @@ function renderSettlement(){
   const monthKey = todayStr().slice(0,7);
   const thisMonth = incomes.filter(x=>(x.date||'').slice(0,7)===monthKey);
 
-  const sumBy=(list,type,cur)=>list.filter(x=>x.sourceType===type&&x.currency===cur).reduce((s,x)=>s+Number(x.amount||0),0);
-  const totalKRW=thisMonth.filter(x=>x.currency==='KRW').reduce((s,x)=>s+Number(x.amount||0),0);
-  const totalCAD=thisMonth.filter(x=>x.currency==='CAD').reduce((s,x)=>s+Number(x.amount||0),0);
+  const sumByCur=(list,type,cur)=>list.filter(x=>x.sourceType===type&&x.currency===cur).reduce((s,x)=>s+Number(x.amount||0),0);
+
+  // 프로젝트 지급: projects.paymentPlan 기준 (source of truth) — income stale data 제외
+  const projPaidByCur = projects.reduce((acc,p)=>{
+    const cur=p.currency||'KRW';
+    const paid=(p.paymentPlan||[]).filter(m=>m.status==='입금완료').reduce((s,m)=>s+Number(m.amount||0),0);
+    acc[cur]=(acc[cur]||0)+paid;
+    return acc;
+  },{});
+  const projKRW=projPaidByCur['KRW']||0, projCAD=projPaidByCur['CAD']||0;
+
+  const salaryKRW=sumByCur(thisMonth,'salary','KRW'), salaryCAD=sumByCur(thisMonth,'salary','CAD');
+  const perTaskKRW=sumByCur(thisMonth,'per_task','KRW'), perTaskCAD=sumByCur(thisMonth,'per_task','CAD');
+  const totalKRW=salaryKRW+perTaskKRW+projKRW;
+  const totalCAD=salaryCAD+perTaskCAD+projCAD;
 
   const salarySections = incomes.filter(x=>x.sourceType==='salary').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const perTaskItems = tasks.filter(t=>t.billingModel==='per_task').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -1203,9 +1215,9 @@ function renderSettlement(){
     <div style="font-size:14px;font-weight:700;margin-bottom:12px;">이번 달 정산 요약</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
       <div><div class="stat-label">총 수입 (KRW)</div><div style="font-size:17px;font-weight:700;">${fmt(totalKRW,'KRW')}${totalCAD>0?`<span style="font-size:12px;font-weight:400;color:var(--ink-soft);margin-left:6px;">+ ${fmt(totalCAD,'CAD')}</span>`:''}</div></div>
-      <div><div class="stat-label">월급</div><div style="font-size:15px;font-weight:600;">${fmt(sumBy(thisMonth,'salary','KRW'),'KRW')}</div></div>
-      <div><div class="stat-label">건별 외주</div><div style="font-size:15px;font-weight:600;">${fmt(sumBy(thisMonth,'per_task','KRW'),'KRW')}${sumBy(thisMonth,'per_task','CAD')>0?` + ${fmt(sumBy(thisMonth,'per_task','CAD'),'CAD')}`:''}</div></div>
-      <div><div class="stat-label">프로젝트 지급</div><div style="font-size:15px;font-weight:600;">${fmt(sumBy(thisMonth,'project_milestone','KRW'),'KRW')}</div></div>
+      <div><div class="stat-label">월급</div><div style="font-size:15px;font-weight:600;">${fmt(salaryKRW,'KRW')}${salaryCAD>0?` + ${fmt(salaryCAD,'CAD')}`:''}</div></div>
+      <div><div class="stat-label">건별 외주</div><div style="font-size:15px;font-weight:600;">${fmt(perTaskKRW,'KRW')}${perTaskCAD>0?` + ${fmt(perTaskCAD,'CAD')}`:''}</div></div>
+      <div><div class="stat-label">프로젝트 지급</div><div style="font-size:15px;font-weight:600;">${fmt(projKRW,'KRW')}${projCAD>0?` + ${fmt(projCAD,'CAD')}`:''}</div></div>
     </div>
   </div>`;
 
@@ -1342,19 +1354,7 @@ function renderSettlement(){
       ms.status='입금완료';
       ms.paidDate=todayStr();
       await saveProjects();
-      const alreadyIn=incomes.find(x=>x.milestoneId===mid);
-      if(!alreadyIn){
-        const c=clientById(proj.clientId);
-        incomes.push({
-          id:uid('inc'),sourceType:'project_milestone',categoryId:null,
-          categoryName:c?c.name:'',title:`${proj.title} - ${ms.label}`,
-          clientId:proj.clientId,clientName:c?c.name:'',
-          projectId:pid,taskId:null,milestoneId:mid,
-          amount:Number(ms.amount||0),currency:proj.currency,
-          date:todayStr(),repeat:'',memo:'',createdAt:Date.now()
-        });
-        await saveIncomes();
-      }
+      await syncIncomeForMilestone(ms, proj);
       toast(`${ms.label} 입금완료 처리되었습니다.`);
       renderSettlement();
     };
@@ -2009,7 +2009,11 @@ function openProjectModal(existing){
     };
     if(existing){ Object.assign(existing, data); toast('프로젝트가 수정되었습니다.'); }
     else{ projects.push({id:uid('proj'), createdAt:Date.now(), linkedTaskIds:[], startDate:todayStr(), ...data}); toast('프로젝트가 추가되었습니다.'); }
-    if(removedIds.length){ incomes = incomes.filter(x=>!removedIds.includes(x.milestoneId)); await saveIncomes(); }
+    // remove income for deleted milestones
+    if(removedIds.length){ incomes = incomes.filter(x=>!removedIds.includes(x.milestoneId)); }
+    // sync income for all milestones — keeps amounts and existence in sync with paymentPlan
+    const savedProj = existing || projects[projects.length-1];
+    for(const m of (savedProj.paymentPlan||[])){ await syncIncomeForMilestone(m, savedProj); }
     await saveProjects(); closeModal(); renderAll();
   });
   renderMilestoneEditor();
