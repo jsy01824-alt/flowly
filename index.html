@@ -296,6 +296,7 @@
         <select class="chip" id="taskFilterStatus">
           <option value="">전체 상태</option><option value="todo">할 일</option><option value="doing">진행 중</option><option value="done">완료</option>
         </select>
+        <select class="chip" id="taskFilterClient"><option value="">전체 클라이언트</option></select>
         <select class="chip" id="taskFilterUrgent"><option value="">전체</option><option value="urgent">긴급만</option><option value="unpaid">미수금만</option></select>
         <select class="chip" id="taskSort">
           <option value="recent">최신순</option><option value="old">오래된순</option><option value="amountHigh">금액 높은순</option><option value="amountLow">금액 낮은순</option><option value="due">마감일 가까운순</option><option value="priority">중요도 높은순</option>
@@ -886,8 +887,17 @@ function renderTaskList(){
   const statusF = document.getElementById('taskFilterStatus').value;
   const urgentF = document.getElementById('taskFilterUrgent').value;
   const sortF = document.getElementById('taskSort').value;
+
+  const clientSel = document.getElementById('taskFilterClient');
+  const prevC = clientSel.value;
+  clientSel.innerHTML = '<option value="">전체 클라이언트</option>' + clients.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  if(clients.find(c=>c.id===prevC)) clientSel.value = prevC;
+  clientSel.onchange = renderTaskList;
+  const clientF = clientSel.value;
+
   let list = tasks.slice();
   if(statusF) list = list.filter(t=>t.status===statusF);
+  if(clientF) list = list.filter(t=>t.clientId===clientF);
   if(urgentF==='urgent') list = list.filter(t=>t.priority==='urgent');
   if(urgentF==='unpaid') list = list.filter(t=>remaining(t)>0);
   if(sortF==='recent') list.sort((a,b)=>b.createdAt-a.createdAt);
@@ -1100,10 +1110,23 @@ function renderIncomeHistory(){
   ].map(([l,v,sub])=>`<div class="card"><div class="stat-label">${l}</div><div class="stat-value">${v}</div>${sub}</div>`).join('');
 
   // breakdown by sourceType (KRW only for summary cards)
+  // project_milestone: paidDate 기준 이번 달 입금완료만 (projects.paymentPlan source of truth)
+  const projBreakByCur = projects.reduce((acc,p)=>{
+    const cur=p.currency||'KRW';
+    (p.paymentPlan||[]).filter(m=>m.status==='입금완료'&&m.paidDate&&m.paidDate.slice(0,7)===monthKey).forEach(m=>{
+      acc[cur]=(acc[cur]||0)+Number(m.amount||0);
+    });
+    return acc;
+  },{});
   const types3=[['salary','월급'],['per_task','건별 외주'],['project_milestone','프로젝트 지급']];
   document.getElementById('incomeBreakdown').innerHTML = types3.map(([t,l])=>{
-    const krw=sumByCur(thisMonth.filter(x=>x.sourceType===t),'KRW');
-    const cad=sumByCur(thisMonth.filter(x=>x.sourceType===t),'CAD');
+    let krw, cad;
+    if(t==='project_milestone'){
+      krw=projBreakByCur['KRW']||0; cad=projBreakByCur['CAD']||0;
+    } else {
+      krw=sumByCur(thisMonth.filter(x=>x.sourceType===t),'KRW');
+      cad=sumByCur(thisMonth.filter(x=>x.sourceType===t),'CAD');
+    }
     return `<div class="card"><div class="stat-label">${l}</div><div class="stat-value" style="font-size:17px;">${fmt(krw,'KRW')}${cad>0?`<span style="font-size:12px;font-weight:400;color:var(--ink-soft);margin-left:6px;">+ ${fmt(cad,'CAD')}</span>`:''}</div></div>`;
   }).join('');
 
@@ -1192,10 +1215,10 @@ function renderSettlement(){
 
   const sumByCur=(list,type,cur)=>list.filter(x=>x.sourceType===type&&x.currency===cur).reduce((s,x)=>s+Number(x.amount||0),0);
 
-  // 프로젝트 지급: projects.paymentPlan 기준 (source of truth) — income stale data 제외
+  // 프로젝트 지급: paidDate가 이번 달인 입금완료 milestone만 포함
   const projPaidByCur = projects.reduce((acc,p)=>{
     const cur=p.currency||'KRW';
-    const paid=(p.paymentPlan||[]).filter(m=>m.status==='입금완료').reduce((s,m)=>s+Number(m.amount||0),0);
+    const paid=(p.paymentPlan||[]).filter(m=>m.status==='입금완료' && m.paidDate && m.paidDate.slice(0,7)===monthKey).reduce((s,m)=>s+Number(m.amount||0),0);
     acc[cur]=(acc[cur]||0)+paid;
     return acc;
   },{});
@@ -1265,7 +1288,10 @@ function renderSettlement(){
   html += `</div>`;
 
   // ---- 프로젝트 계약 정산 ----
-  html += `<h3 style="font-size:14px;margin:0 0 10px;color:var(--ink-soft);">프로젝트 계약 정산</h3>
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+    <h3 style="font-size:14px;margin:0;color:var(--ink-soft);">프로젝트 계약 정산</h3>
+    <button class="btn sm dark" id="settlementAddProjectBtn">+ 프로젝트 추가</button>
+  </div>
   <div id="projectSettlementWrap">`;
   if(!projectItems.length){
     html += `<div class="card"><div class="empty">프로젝트 계약이 없어요.</div></div>`;
@@ -1282,6 +1308,7 @@ function renderSettlement(){
           <div style="display:flex;align-items:center;gap:10px;">
             <div style="text-align:right;"><div style="font-size:11px;color:var(--ink-soft);">총 계약금</div><div style="font-weight:700;">${fmt(totalAmount,p.currency)}</div></div>
             <button class="iconbtn-sm projEditBtn">수정</button>
+            <button class="iconbtn-sm projDelBtn" style="color:var(--bad)">삭제</button>
           </div>
         </div>
         <div style="display:flex;gap:16px;margin-bottom:12px;font-size:13px;">
@@ -1332,12 +1359,24 @@ function renderSettlement(){
     };
   });
 
+  // + 프로젝트 추가 버튼
+  const addProjBtn = document.getElementById('settlementAddProjectBtn');
+  if(addProjBtn) addProjBtn.onclick = ()=>{ openProjectModal(null); };
+
   // project edit buttons
   document.querySelectorAll('.projEditBtn').forEach(btn=>{
     btn.onclick=()=>{
       const pid=btn.closest('[data-pid]').dataset.pid;
       const p=projects.find(x=>x.id===pid);
       if(p) openProjectModal(p);
+    };
+  });
+
+  // project delete buttons
+  document.querySelectorAll('.projDelBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      const pid=btn.closest('[data-pid]').dataset.pid;
+      deleteProject(pid);
     };
   });
 
@@ -1944,21 +1983,36 @@ function renderMilestoneEditor(){
   if(!editingPaymentPlan.length){ wrap.innerHTML = '<div class="empty" style="padding:14px 0;">결제 단계를 추가해주세요 (선금/중도금/잔금 등)</div>'; }
   else{
     wrap.innerHTML = editingPaymentPlan.map((ms,i)=>`
-      <div class="row-flex" data-i="${i}" style="margin-bottom:8px;">
-        <input class="msLabel" value="${escapeHtml(ms.label)}" placeholder="예: 선금" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-family:inherit;font-size:13px;background:var(--panel2);height:36px;box-sizing:border-box;">
-        <input class="msAmount" type="number" value="${ms.amount}" placeholder="금액" style="width:110px;border:1px solid var(--line);border-radius:9px;padding:8px;font-family:inherit;font-size:13px;background:var(--panel2);height:36px;box-sizing:border-box;">
-        <input class="msDue" type="date" value="${ms.dueDate||''}" style="width:130px;border:1px solid var(--line);border-radius:9px;padding:8px;font-family:inherit;font-size:13px;background:var(--panel2);height:36px;box-sizing:border-box;">
-        <select class="msStatus chip" style="height:36px;">
-          ${['미청구','청구완료','입금완료','연체'].map(s=>`<option ${ms.status===s?'selected':''}>${s}</option>`).join('')}
-        </select>
-        <button class="iconbtn-sm msDel" style="color:var(--bad);flex:none;">✕</button>
+      <div style="border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;" data-i="${i}">
+        <div class="row-flex" style="gap:8px;margin-bottom:6px;">
+          <input class="msLabel" value="${escapeHtml(ms.label)}" placeholder="예: 선금" style="flex:1;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-family:inherit;font-size:13px;background:var(--panel2);height:36px;box-sizing:border-box;">
+          <input class="msAmount" type="number" value="${ms.amount}" placeholder="금액" style="width:110px;border:1px solid var(--line);border-radius:9px;padding:8px;font-family:inherit;font-size:13px;background:var(--panel2);height:36px;box-sizing:border-box;">
+          <button class="iconbtn-sm msDel" style="color:var(--bad);flex:none;">✕</button>
+        </div>
+        <div class="row-flex" style="gap:8px;">
+          <div style="flex:1;"><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;">예정일</div><input class="msDue" type="date" value="${ms.dueDate||''}" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:7px 8px;font-family:inherit;font-size:12.5px;background:var(--panel2);height:34px;box-sizing:border-box;"></div>
+          <div style="flex:1;"><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;">상태</div><select class="msStatus chip" style="height:34px;width:100%;font-size:12.5px;">${['미청구','청구완료','입금완료','연체'].map(s=>`<option ${ms.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+          <div class="msPaidDateWrap" style="flex:1;${ms.status==='입금완료'?'':'display:none;'}"><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;">실제 입금일 *</div><input class="msPaidDate" type="date" value="${ms.paidDate||''}" style="width:100%;border:1px solid var(--line);border-radius:9px;padding:7px 8px;font-family:inherit;font-size:12.5px;background:var(--panel2);height:34px;box-sizing:border-box;"></div>
+        </div>
+        ${ms.status==='입금완료'&&!ms.paidDate?`<div style="font-size:11px;color:var(--warn);margin-top:5px;">⚠ 입금완료 상태에는 실제 입금일이 필요해요.</div>`:''}
       </div>`).join('');
     wrap.querySelectorAll('[data-i]').forEach(row=>{
       const i = Number(row.dataset.i);
       row.querySelector('.msLabel').oninput = e=>editingPaymentPlan[i].label=e.target.value;
       row.querySelector('.msAmount').oninput = e=>editingPaymentPlan[i].amount=parseFloat(e.target.value)||0;
       row.querySelector('.msDue').oninput = e=>editingPaymentPlan[i].dueDate=e.target.value;
-      row.querySelector('.msStatus').onchange = e=>{ editingPaymentPlan[i].status=e.target.value; if(e.target.value==='입금완료' && !editingPaymentPlan[i].paidDate) editingPaymentPlan[i].paidDate=todayStr(); };
+      row.querySelector('.msPaidDate').oninput = e=>editingPaymentPlan[i].paidDate=e.target.value;
+      row.querySelector('.msStatus').onchange = e=>{
+        editingPaymentPlan[i].status=e.target.value;
+        const pdWrap = row.querySelector('.msPaidDateWrap');
+        if(e.target.value==='입금완료'){
+          pdWrap.style.display='';
+          if(!editingPaymentPlan[i].paidDate) editingPaymentPlan[i].paidDate=todayStr();
+          row.querySelector('.msPaidDate').value = editingPaymentPlan[i].paidDate;
+        } else {
+          pdWrap.style.display='none';
+        }
+      };
       row.querySelector('.msDel').onclick = ()=>{ editingPaymentPlan.splice(i,1); renderMilestoneEditor(); };
     });
   }
@@ -2002,6 +2056,8 @@ function openProjectModal(existing){
     const title = document.getElementById('m-p-title').value.trim();
     const totalAmount = parseFloat(document.getElementById('m-p-total').value);
     if(!clientId || !title || !totalAmount){ toast('필수 항목을 입력해주세요.'); return; }
+    const paidNoPaidDate = editingPaymentPlan.filter(m=>m.status==='입금완료' && !m.paidDate);
+    if(paidNoPaidDate.length){ toast(`입금완료 항목(${paidNoPaidDate.map(m=>m.label||'이름없음').join(', ')})에 실제 입금일을 입력해주세요.`); return; }
     const removedIds = existing ? (existing.paymentPlan||[]).filter(old=>!editingPaymentPlan.some(m=>m.id===old.id)).map(m=>m.id) : [];
     const data = {
       clientId, title, description:document.getElementById('m-p-desc').value.trim(),
@@ -2156,11 +2212,17 @@ function renderDashboard(){
   const now = new Date();
   const thisYM = now.toISOString().slice(0,7);
 
-  // Dashboard income must come from the Income ledger (incomes[]), not by scanning tasks directly —
-  // tasks-only would miss salary entries and project milestone payouts entirely.
-  // mini graph: last 6 months total income (KRW) from the Income ledger
+  // mini graph: last 6 months KRW income
+  // salary/per_task from incomes[]; project_milestone from projects.paymentPlan paidDate (source of truth)
   const monthsArr=[]; for(let i=5;i>=0;i--){ const d=new Date(); d.setMonth(d.getMonth()-i); monthsArr.push(d.toISOString().slice(0,7)); }
-  const sumsArr = monthsArr.map(m=>incomes.filter(x=>(x.date||'').slice(0,7)===m && x.currency==='KRW').reduce((s,x)=>s+Number(x.amount||0),0));
+  const sumsArr = monthsArr.map(m=>{
+    const baseIncome = incomes.filter(x=>(x.date||'').slice(0,7)===m && x.currency==='KRW' && x.sourceType!=='project_milestone').reduce((s,x)=>s+Number(x.amount||0),0);
+    const projIncome = projects.reduce((s,p)=>{
+      if((p.currency||'KRW')!=='KRW') return s;
+      return s + (p.paymentPlan||[]).filter(ms=>ms.status==='입금완료'&&ms.paidDate&&ms.paidDate.slice(0,7)===m).reduce((ss,ms)=>ss+Number(ms.amount||0),0);
+    },0);
+    return baseIncome + projIncome;
+  });
   document.getElementById('incomeChart').innerHTML = renderSparkline(sumsArr, monthsArr);
 
   function renderSparkline(values, months){
@@ -2171,8 +2233,8 @@ function renderDashboard(){
     let path = `M ${pts[0][0]} ${pts[0][1]}`;
     for(let i=0;i<pts.length-1;i++){
       const [x0,y0]=pts[i], [x1,y1]=pts[i+1];
-      const cx=(x0+x1)/2;
-      path += ` Q ${cx} ${y0}, ${cx} ${(y0+y1)/2} Q ${cx} ${y1}, ${x1} ${y1}`;
+      const cp = (x1-x0)*0.4;
+      path += ` C ${x0+cp} ${y0} ${x1-cp} ${y1} ${x1} ${y1}`;
     }
     const areaPath = path + ` L ${pts[n-1][0]} ${H} L ${pts[0][0]} ${H} Z`;
     const last = pts[n-1];
@@ -2197,19 +2259,18 @@ function renderDashboard(){
 
   const counts={todo:0,doing:0,done:0};
   tasks.forEach(t=>counts[t.status]=(counts[t.status]||0)+1);
-  const totalT = tasks.length||1;
-  const pTodo=Math.round(counts.todo/totalT*100), pDoing=Math.round(counts.doing/totalT*100), pDone=Math.round(counts.done/totalT*100);
+  const totalT = tasks.length || 0;
+  const pDone = totalT ? Math.round(counts.done / totalT * 100) : 0;
   document.getElementById('taskStat').innerHTML = `
     <div class="row-flex" style="gap:0;margin-bottom:10px;">
       <div class="stat" style="flex:1;text-align:center;"><b>${counts.todo}</b><span>할 일</span></div>
       <div class="stat" style="flex:1;text-align:center;"><b>${counts.doing}</b><span>진행중</span></div>
       <div class="stat" style="flex:1;text-align:center;"><b>${counts.done}</b><span>완료</span></div>
     </div>
-    <div class="progressline" style="display:flex;">
-      <i style="width:${pTodo}%;background:#E5E7EB;border-radius:4px 0 0 4px;"></i>
-      <i style="width:${pDoing}%;background:#111111;border-radius:0;"></i>
-      <i style="width:${pDone}%;background:#E5E7EB;border-radius:0 4px 4px 0;"></i>
-    </div>`;
+    <div class="progressline">
+      <i style="width:${pDone}%;background:#111111;border-radius:4px;"></i>
+    </div>
+    <div style="font-size:11px;color:var(--ink-soft);margin-top:6px;text-align:right;">완료율 ${pDone}%</div>`;
 
   // recent entries (worklog)
   const recent = tasks.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);
@@ -2342,6 +2403,7 @@ function renderAll(){
   renderSavedInvoices();
   renderReceipts();
   renderClients();
+  renderProjectCards();
   fillSettingsForm();
 }
 ['taskFilterStatus','taskFilterUrgent','taskSort'].forEach(id=>document.getElementById(id).onchange=renderTaskList);
