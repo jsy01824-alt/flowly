@@ -308,11 +308,25 @@
           <button class="btn dark" id="addIncomeBtn">+ 수입 추가</button>
         </div>
       </div>
-      <div class="cardgrid c2" id="incomeTopStats" style="margin-bottom:14px;"></div>
-      <div class="cardgrid c3" id="incomeBreakdown" style="margin-bottom:20px;"></div>
+      <!-- 수입 내역 / 정산 관리 상단 탭 -->
+      <div class="toolbar" id="incomeMainTabs" style="gap:24px;margin-bottom:20px;border-bottom:1px solid var(--line);padding-bottom:12px;"></div>
 
-      <div class="toolbar" id="incomeTypeTabs" style="margin-bottom:16px;"></div>
-      <div class="card"><div id="incomeTableWrap"></div></div>
+      <!-- 수입 내역 pane -->
+      <div id="incomeHistoryPane">
+        <div class="cardgrid c2" id="incomeTopStats" style="margin-bottom:14px;"></div>
+        <div class="cardgrid c3" id="incomeBreakdown" style="margin-bottom:14px;"></div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+          <button class="btn outline" id="currencyDetailToggle" style="font-size:13px;padding:0 16px;height:34px;">통화별 상세 보기</button>
+        </div>
+        <div id="currencyDetailSection" style="display:none;margin-bottom:20px;"></div>
+        <div class="toolbar" id="incomeTypeTabs" style="margin-bottom:16px;"></div>
+        <div class="card"><div id="incomeTableWrap"></div></div>
+      </div>
+
+      <!-- 정산 관리 pane -->
+      <div id="incomeSettlementPane" style="display:none;">
+        <div id="settlementWrap"></div>
+      </div>
     </section>
 
     <!-- INVOICES -->
@@ -1019,57 +1033,284 @@ document.getElementById('wlDrawerOverlay').addEventListener('click', e=>{ if(e.t
 /* ================= INCOME ================= */
 let incomeCatFilter='';
 let incomeTypeFilter = '';
-function renderIncome(){
+let incomeMainTab = 'history'; // 'history' | 'settlement'
+let currencyDetailOpen = false;
+
+function getCurrencyBreakdown(items){
+  return items.reduce((acc, item)=>{
+    const cur = item.currency||'KRW';
+    const type = item.sourceType||'other';
+    const amount = Number(item.amount)||0;
+    if(!acc[cur]) acc[cur]={total:0,salary:0,per_task:0,project_milestone:0,reimbursement:0,other:0};
+    acc[cur].total += amount;
+    acc[cur][type] = (acc[cur][type]||0) + amount;
+    return acc;
+  }, {});
+}
+
+function renderCurrencyDetail(filteredIncomes){
+  const bd = getCurrencyBreakdown(filteredIncomes);
+  const currencies = Object.keys(bd);
+  if(!currencies.length){ return '<div class="empty" style="padding:16px 0;">데이터가 없어요.</div>'; }
+  const labelMap = {salary:'월급',per_task:'건별 외주',project_milestone:'프로젝트 지급',reimbursement:'비용 정산',other:'기타 수입'};
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;">
+    ${currencies.map(cur=>{
+      const d=bd[cur];
+      return `<div class="card" style="border-radius:18px;">
+        <div style="font-size:12px;font-weight:700;color:var(--ink-soft);letter-spacing:.05em;margin-bottom:10px;">${cur}</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:12px;">${fmt(d.total,cur)}</div>
+        ${Object.entries(labelMap).map(([k,l])=>d[k]?`<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;"><span style="color:var(--ink-soft);">${l}</span><span>${fmt(d[k],cur)}</span></div>`:''  ).join('')}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderIncomeHistory(){
   const monthKey = todayStr().slice(0,7);
   const yearKey = todayStr().slice(0,4);
-  const sumKRW = list => list.reduce((s,x)=> s + (x.currency==='KRW'? Number(x.amount||0):0), 0);
+  const sumByCur = (list,cur) => list.reduce((s,x)=>s+(x.currency===cur?Number(x.amount||0):0),0);
 
   const thisMonth = incomes.filter(x=>(x.date||'').slice(0,7)===monthKey);
-  const thisYear = incomes.filter(x=>(x.date||'').slice(0,4)===yearKey);
+  const thisYear  = incomes.filter(x=>(x.date||'').slice(0,4)===yearKey);
 
+  // top stats: show KRW always, CAD if exists
+  const monthKRW = sumByCur(thisMonth,'KRW'), monthCAD = sumByCur(thisMonth,'CAD');
+  const yearKRW  = sumByCur(thisYear,'KRW'),  yearCAD  = sumByCur(thisYear,'CAD');
+  const cadSub = (v)=>v>0?`<div class="stat-sub">+ ${fmt(v,'CAD')}</div>`:'';
   document.getElementById('incomeTopStats').innerHTML = [
-    ['이번 달 총 수입', fmt(sumKRW(thisMonth),'KRW')],
-    ['올해 총 수입', fmt(sumKRW(thisYear),'KRW')],
-  ].map(([l,v])=>`<div class="card"><div class="stat-label">${l}</div><div class="stat-value">${v}</div></div>`).join('');
+    [`이번 달 총 수입`, fmt(monthKRW,'KRW'), cadSub(monthCAD)],
+    [`올해 총 수입`,   fmt(yearKRW,'KRW'),  cadSub(yearCAD)],
+  ].map(([l,v,sub])=>`<div class="card"><div class="stat-label">${l}</div><div class="stat-value">${v}</div>${sub}</div>`).join('');
 
-  const salaryThisMonth = sumKRW(thisMonth.filter(x=>x.sourceType==='salary'));
-  const perTaskThisMonth = sumKRW(thisMonth.filter(x=>x.sourceType==='per_task'));
-  const milestoneThisMonth = sumKRW(thisMonth.filter(x=>x.sourceType==='project_milestone'));
-  document.getElementById('incomeBreakdown').innerHTML = [
-    ['월급', salaryThisMonth], ['건별 외주', perTaskThisMonth], ['프로젝트 지급', milestoneThisMonth],
-  ].map(([l,v])=>`<div class="card"><div class="stat-label">${l}</div><div class="stat-value" style="font-size:17px;">${fmt(v,'KRW')}</div></div>`).join('');
+  // breakdown by sourceType (KRW only for summary cards)
+  const types3=[['salary','월급'],['per_task','건별 외주'],['project_milestone','프로젝트 지급']];
+  document.getElementById('incomeBreakdown').innerHTML = types3.map(([t,l])=>{
+    const krw=sumByCur(thisMonth.filter(x=>x.sourceType===t),'KRW');
+    const cad=sumByCur(thisMonth.filter(x=>x.sourceType===t),'CAD');
+    return `<div class="card"><div class="stat-label">${l}</div><div class="stat-value" style="font-size:17px;">${fmt(krw,'KRW')}${cad>0?`<span style="font-size:12px;font-weight:400;color:var(--ink-soft);margin-left:6px;">+ ${fmt(cad,'CAD')}</span>`:''}</div></div>`;
+  }).join('');
 
+  // currency detail toggle button
+  const toggleBtn = document.getElementById('currencyDetailToggle');
+  toggleBtn.textContent = currencyDetailOpen ? '접기' : '통화별 상세 보기';
+  toggleBtn.onclick = ()=>{ currencyDetailOpen=!currencyDetailOpen; renderIncomeHistory(); };
+  const detailSec = document.getElementById('currencyDetailSection');
+  if(currencyDetailOpen){
+    let filteredForDetail = incomes.slice();
+    if(incomeTypeFilter) filteredForDetail = filteredForDetail.filter(x=>x.sourceType===incomeTypeFilter);
+    detailSec.style.display='block';
+    detailSec.innerHTML = `<h3 style="font-size:14px;margin-bottom:12px;color:var(--ink-soft);">통화별 정산</h3>${renderCurrencyDetail(filteredForDetail)}`;
+  } else {
+    detailSec.style.display='none';
+    detailSec.innerHTML='';
+  }
+
+  // type filter tabs
   const tabsWrap = document.getElementById('incomeTypeTabs');
-  tabsWrap.style.gap = '18px';
-  const types = [['','전체'],['salary','월급'],['per_task','건별 외주'],['project_milestone','프로젝트 지급'],['reimbursement','비용 정산'],['other','기타 수입']];
-  tabsWrap.innerHTML = types.map(([val,label])=>
+  tabsWrap.style.gap='18px';
+  const allTypes=[['','전체'],['salary','월급'],['per_task','건별 외주'],['project_milestone','프로젝트 지급'],['reimbursement','비용 정산'],['other','기타 수입']];
+  tabsWrap.innerHTML = allTypes.map(([val,label])=>
     `<div style="cursor:pointer;font-size:13px;${incomeTypeFilter===val?'color:#13151A;font-weight:700;':'color:#B0B5BD;font-weight:500;'}" data-type="${val}">${label}</div>`
   ).join('');
-  tabsWrap.querySelectorAll('[data-type]').forEach(el=>{ el.onclick=()=>{ incomeTypeFilter=el.dataset.type; renderIncome(); }; });
+  tabsWrap.querySelectorAll('[data-type]').forEach(el=>{ el.onclick=()=>{ incomeTypeFilter=el.dataset.type; renderIncomeHistory(); }; });
 
   let listAll = incomes.slice();
-  if(incomeTypeFilter) listAll = listAll.filter(x=>x.sourceType===incomeTypeFilter);
+  if(incomeTypeFilter) listAll=listAll.filter(x=>x.sourceType===incomeTypeFilter);
   listAll.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const wrap = document.getElementById('incomeTableWrap');
   if(!listAll.length){ wrap.innerHTML='<div class="empty">조건에 맞는 수입 기록이 없어요.</div>'; return; }
-  wrap.innerHTML = `<table><thead><tr><th>날짜</th><th>유형</th><th>제목</th><th>클라이언트</th><th class="right">금액</th><th>메모</th><th></th></tr></thead><tbody>
+  wrap.innerHTML=`<table><thead><tr><th>날짜</th><th>유형</th><th>제목</th><th>클라이언트</th><th class="right">금액</th><th>메모</th><th></th></tr></thead><tbody>
   ${listAll.map(x=>`<tr data-id="${x.id}">
       <td>${x.date}</td>
       <td><span class="badge ${x.sourceType==='salary'?'salary':'paid'}">${sourceTypeLabel(x.sourceType)}</span></td>
       <td>${escapeHtml(x.title)}</td><td>${escapeHtml(x.clientName||'-')}</td>
       <td class="right">${fmt(x.amount,x.currency)}</td><td>${escapeHtml(x.memo||'-')}</td>
-      <td class="row-flex">${x.taskId||x.milestoneId? '<span style="color:var(--ink-soft);font-size:11px;">자동반영</span>' : `<button class="iconbtn-sm incomeDelBtn" style="color:var(--bad)">삭제</button>`}</td>
+      <td class="row-flex">${x.taskId||x.milestoneId?'<span style="color:var(--ink-soft);font-size:11px;">자동반영</span>':`<button class="iconbtn-sm incomeDelBtn" style="color:var(--bad)">삭제</button>`}</td>
     </tr>`).join('')}</tbody></table>`;
   wrap.querySelectorAll('.incomeDelBtn').forEach(btn=>{
-    btn.onclick = async ()=>{
+    btn.onclick=async()=>{
       if(!confirm('이 수입 기록을 삭제할까요?')) return;
-      const id = btn.closest('tr').dataset.id;
-      incomes = incomes.filter(x=>x.id!==id);
+      const id=btn.closest('tr').dataset.id;
+      incomes=incomes.filter(x=>x.id!==id);
       await saveIncomes();
       toast('삭제되었습니다.');
-      renderIncome();
+      renderIncomeHistory();
     };
   });
+}
+
+function renderSettlement(){
+  const monthKey = todayStr().slice(0,7);
+  const thisMonth = incomes.filter(x=>(x.date||'').slice(0,7)===monthKey);
+
+  // monthly summary
+  const sumBy=(list,type,cur)=>list.filter(x=>x.sourceType===type&&x.currency===cur).reduce((s,x)=>s+Number(x.amount||0),0);
+  const totalKRW=thisMonth.filter(x=>x.currency==='KRW').reduce((s,x)=>s+Number(x.amount||0),0);
+  const totalCAD=thisMonth.filter(x=>x.currency==='CAD').reduce((s,x)=>s+Number(x.amount||0),0);
+
+  const salarySections = incomes.filter(x=>x.sourceType==='salary').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const perTaskItems = tasks.filter(t=>t.billingModel==='per_task').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const projectItems = projects.slice();
+
+  let html = '';
+
+  // ---- summary ----
+  html += `<div class="card" style="margin-bottom:18px;">
+    <div style="font-size:14px;font-weight:700;margin-bottom:12px;">이번 달 정산 요약</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+      <div><div class="stat-label">총 수입 (KRW)</div><div style="font-size:17px;font-weight:700;">${fmt(totalKRW,'KRW')}${totalCAD>0?`<span style="font-size:12px;font-weight:400;color:var(--ink-soft);margin-left:6px;">+ ${fmt(totalCAD,'CAD')}</span>`:''}</div></div>
+      <div><div class="stat-label">월급</div><div style="font-size:15px;font-weight:600;">${fmt(sumBy(thisMonth,'salary','KRW'),'KRW')}</div></div>
+      <div><div class="stat-label">건별 외주</div><div style="font-size:15px;font-weight:600;">${fmt(sumBy(thisMonth,'per_task','KRW'),'KRW')}${sumBy(thisMonth,'per_task','CAD')>0?` + ${fmt(sumBy(thisMonth,'per_task','CAD'),'CAD')}`:''}</div></div>
+      <div><div class="stat-label">프로젝트 지급</div><div style="font-size:15px;font-weight:600;">${fmt(sumBy(thisMonth,'project_milestone','KRW'),'KRW')}</div></div>
+    </div>
+  </div>`;
+
+  // ---- 월급 관리 ----
+  html += `<h3 style="font-size:14px;margin:0 0 10px;color:var(--ink-soft);">월급 관리</h3>
+  <div class="card" style="margin-bottom:18px;">`;
+  if(!salarySections.length){
+    html += `<div class="empty">월급 기록이 없어요. 수입 추가에서 월급 유형으로 등록해주세요.</div>`;
+  } else {
+    html += `<table><thead><tr><th>날짜</th><th>제목</th><th class="right">금액</th><th>통화</th><th>반복</th><th>메모</th><th></th></tr></thead><tbody>
+    ${salarySections.map(x=>`<tr data-id="${x.id}">
+      <td>${x.date}</td><td>${escapeHtml(x.title)}</td>
+      <td class="right">${fmt(x.amount,x.currency)}</td><td>${x.currency}</td>
+      <td>${x.repeat==='monthly'?'매월 반복':'없음'}</td>
+      <td>${escapeHtml(x.memo||'-')}</td>
+      <td><button class="iconbtn-sm salaryDelBtn" style="color:var(--bad)">삭제</button></td>
+    </tr>`).join('')}</tbody></table>`;
+  }
+  html += `</div>`;
+
+  // ---- 건별 외주 정산 ----
+  html += `<h3 style="font-size:14px;margin:0 0 10px;color:var(--ink-soft);">건별 외주 정산</h3>
+  <div class="card" style="margin-bottom:18px;">`;
+  if(!perTaskItems.length){
+    html += `<div class="empty">건별 외주 업무가 없어요.</div>`;
+  } else {
+    const payStatusLabel={unbilled:'미청구',billed:'청구됨',partial:'일부 입금',paid:'완료'};
+    html += `<table><thead><tr><th>클라이언트</th><th>업무명</th><th class="right">견적</th><th class="right">받은 금액</th><th class="right">미수금</th><th>상태</th><th>날짜</th></tr></thead><tbody>
+    ${perTaskItems.map(t=>{
+      const c=clientById(t.clientId);
+      const est=Number(t.estimateAmount||0), rec=Number(t.receivedAmount||0), rem=Math.max(0,est-rec);
+      return `<tr>
+        <td>${escapeHtml(c?c.name:'-')}</td><td>${escapeHtml(t.title)}</td>
+        <td class="right">${fmt(est,t.currency)}</td>
+        <td class="right">${fmt(rec,t.currency)}</td>
+        <td class="right" style="color:${rem>0?'var(--bad)':'var(--good)'};">${rem>0?fmt(rem,t.currency):'✓'}</td>
+        <td><span class="badge ${t.paymentStatus}">${payStatusLabel[t.paymentStatus]||t.paymentStatus}</span></td>
+        <td>${t.date||'-'}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+  }
+  html += `</div>`;
+
+  // ---- 프로젝트 계약 정산 ----
+  html += `<h3 style="font-size:14px;margin:0 0 10px;color:var(--ink-soft);">프로젝트 계약 정산</h3>
+  <div id="projectSettlementWrap">`;
+  if(!projectItems.length){
+    html += `<div class="card"><div class="empty">프로젝트 계약이 없어요. 클라이언트에서 프로젝트 계약 유형으로 등록해주세요.</div></div>`;
+  } else {
+    html += projectItems.map(p=>{
+      const c=clientById(p.clientId);
+      const plan=Array.isArray(p.paymentPlan)?p.paymentPlan:[];
+      const totalPaid=plan.filter(m=>m.status==='입금완료').reduce((s,m)=>s+Number(m.amount||0),0);
+      const totalAmount=Number(p.totalAmount||0);
+      const remaining=totalAmount-totalPaid;
+      return `<div class="card" style="margin-bottom:12px;" data-pid="${p.id}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+          <div><b style="font-size:14px;">${escapeHtml(p.title)}</b><div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${escapeHtml(c?c.name:'-')} · ${p.currency}</div></div>
+          <div style="text-align:right;"><div style="font-size:11px;color:var(--ink-soft);">총 계약금</div><div style="font-weight:700;">${fmt(totalAmount,p.currency)}</div></div>
+        </div>
+        <div style="display:flex;gap:16px;margin-bottom:12px;font-size:13px;">
+          <span>받은 금액 <b>${fmt(totalPaid,p.currency)}</b></span>
+          <span style="color:${remaining>0?'var(--bad)':'var(--good)'};">남은 금액 <b>${remaining>0?fmt(remaining,p.currency):'완납 ✓'}</b></span>
+        </div>
+        ${plan.length?`<div style="border-top:1px solid var(--line);padding-top:10px;">
+          ${plan.map(m=>`<div class="row-flex" style="margin-bottom:8px;font-size:13px;" data-mid="${m.id}">
+            <span style="flex:1;">${escapeHtml(m.label)} <span style="color:var(--ink-soft);">${m.dueDate?`(${m.dueDate})`:''}  ${fmt(Number(m.amount||0),p.currency)}</span></span>
+            <span class="badge ${m.status==='입금완료'?'paid':m.status==='미청구'?'unbilled':'billed'}" style="margin-right:8px;">${m.status}</span>
+            ${m.status!=='입금완료'?`<button class="btn sm light msMarkPaidBtn" style="font-size:11px;padding:0 10px;height:28px;">입금완료</button>`:'<span style="font-size:11px;color:var(--good);padding:0 10px;">✓ 완료</span>'}
+          </div>`).join('')}
+        </div>`:'<div class="empty" style="font-size:12px;">결제 단계가 없어요.</div>'}
+      </div>`;
+    }).join('');
+  }
+  html += `</div>`;
+
+  document.getElementById('settlementWrap').innerHTML = html;
+
+  // salary delete buttons
+  document.querySelectorAll('.salaryDelBtn').forEach(btn=>{
+    btn.onclick=async()=>{
+      if(!confirm('이 월급 기록을 삭제할까요?')) return;
+      const id=btn.closest('tr').dataset.id;
+      incomes=incomes.filter(x=>x.id!==id);
+      await saveIncomes();
+      toast('삭제되었습니다.');
+      renderSettlement();
+    };
+  });
+
+  // milestone mark-paid buttons
+  document.querySelectorAll('.msMarkPaidBtn').forEach(btn=>{
+    btn.onclick=async()=>{
+      const milestoneRow=btn.closest('[data-mid]');
+      const projectCard=btn.closest('[data-pid]');
+      if(!milestoneRow||!projectCard) return;
+      const mid=milestoneRow.dataset.mid;
+      const pid=projectCard.dataset.pid;
+      const proj=projects.find(p=>p.id===pid);
+      if(!proj) return;
+      const ms=proj.paymentPlan.find(m=>m.id===mid);
+      if(!ms) return;
+      ms.status='입금완료';
+      ms.paidDate=todayStr();
+      await saveProjects();
+      // add income record if not already there
+      const alreadyIn=incomes.find(x=>x.milestoneId===mid);
+      if(!alreadyIn){
+        const c=clientById(proj.clientId);
+        incomes.push({
+          id:uid('inc'),sourceType:'project_milestone',categoryId:null,
+          categoryName:c?c.name:'',title:`${proj.title} - ${ms.label}`,
+          clientId:proj.clientId,clientName:c?c.name:'',
+          projectId:pid,taskId:null,milestoneId:mid,
+          amount:Number(ms.amount||0),currency:proj.currency,
+          date:todayStr(),repeat:'',memo:'',createdAt:Date.now()
+        });
+        await saveIncomes();
+        toast(`${ms.label} 입금완료 처리되었습니다.`);
+      } else {
+        toast(`${ms.label} 입금완료 처리되었습니다.`);
+      }
+      renderSettlement();
+    };
+  });
+}
+
+function renderIncome(){
+  // main tab bar
+  const mainTabs=document.getElementById('incomeMainTabs');
+  const tabs=[['history','수입 내역'],['settlement','정산 관리']];
+  mainTabs.innerHTML=tabs.map(([val,label])=>
+    `<div style="cursor:pointer;font-size:14px;${incomeMainTab===val?'color:#13151A;font-weight:700;border-bottom:2px solid #13151A;padding-bottom:10px;margin-bottom:-13px;':'color:#B0B5BD;font-weight:500;'}" data-maintab="${val}">${label}</div>`
+  ).join('');
+  mainTabs.querySelectorAll('[data-maintab]').forEach(el=>{
+    el.onclick=()=>{ incomeMainTab=el.dataset.maintab; renderIncome(); };
+  });
+
+  const histPane=document.getElementById('incomeHistoryPane');
+  const setlPane=document.getElementById('incomeSettlementPane');
+  if(incomeMainTab==='settlement'){
+    histPane.style.display='none';
+    setlPane.style.display='block';
+    renderSettlement();
+  } else {
+    histPane.style.display='block';
+    setlPane.style.display='none';
+    renderIncomeHistory();
+  }
 }
 
 document.getElementById('addIncomeBtn').onclick = ()=>{
@@ -1887,9 +2128,9 @@ function renderDashboard(){
       <div class="stat" style="flex:1;text-align:center;"><b>${counts.done}</b><span>완료</span></div>
     </div>
     <div class="progressline" style="display:flex;">
-      <i style="width:${pTodo}%;background:#D8D3C4;border-radius:4px 0 0 4px;"></i>
-      <i style="width:${pDoing}%;background:#C8862D;border-radius:0;"></i>
-      <i style="width:${pDone}%;background:#13151A;border-radius:0 4px 4px 0;"></i>
+      <i style="width:${pTodo}%;background:#E5E7EB;border-radius:4px 0 0 4px;"></i>
+      <i style="width:${pDoing}%;background:#111111;border-radius:0;"></i>
+      <i style="width:${pDone}%;background:#E5E7EB;border-radius:0 4px 4px 0;"></i>
     </div>`;
 
   // recent entries (worklog)
