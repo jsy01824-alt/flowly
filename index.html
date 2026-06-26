@@ -539,6 +539,12 @@ function clientColor(name){ const colors=['#C97B4A','#5B7FA6','#8C6BAE','#4F8A6B
 function remaining(t){ if(t.billingModel!=='per_task') return 0; return Math.max(0, Number(t.estimateAmount||0) - Number(t.receivedAmount||0)); }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 
+// 두 날짜가 같은 year-month인지 확인 (월별 수입 계산 전용)
+function isSameMonth(dateStr, targetYM){
+  if(!dateStr) return false;
+  return String(dateStr).slice(0,7) === targetYM;
+}
+
 // downscale + recompress an uploaded image before storing — uncompressed phone photos (often 2-8MB)
 // were the most likely cause of "Internal server error" when saving receipts.
 function compressImageFile(file, maxDim=900, quality=0.6){
@@ -1113,7 +1119,7 @@ function renderIncomeHistory(){
   // project_milestone: paidDate 기준 이번 달 입금완료만 (projects.paymentPlan source of truth)
   const projBreakByCur = projects.reduce((acc,p)=>{
     const cur=p.currency||'KRW';
-    (p.paymentPlan||[]).filter(m=>m.status==='입금완료'&&m.paidDate&&m.paidDate.slice(0,7)===monthKey).forEach(m=>{
+    (p.paymentPlan||[]).filter(m=>m.status==='입금완료' && isSameMonth(m.paidDate, monthKey)).forEach(m=>{
       acc[cur]=(acc[cur]||0)+Number(m.amount||0);
     });
     return acc;
@@ -1215,10 +1221,12 @@ function renderSettlement(){
 
   const sumByCur=(list,type,cur)=>list.filter(x=>x.sourceType===type&&x.currency===cur).reduce((s,x)=>s+Number(x.amount||0),0);
 
-  // 프로젝트 지급: paidDate가 이번 달인 입금완료 milestone만 포함
+  // 프로젝트 지급: status===입금완료 + paidDate가 이번 달인 milestone만 합산
   const projPaidByCur = projects.reduce((acc,p)=>{
     const cur=p.currency||'KRW';
-    const paid=(p.paymentPlan||[]).filter(m=>m.status==='입금완료' && m.paidDate && m.paidDate.slice(0,7)===monthKey).reduce((s,m)=>s+Number(m.amount||0),0);
+    const paid=(p.paymentPlan||[])
+      .filter(m=>m.status==='입금완료' && isSameMonth(m.paidDate, monthKey))
+      .reduce((s,m)=>s+Number(m.amount||0),0);
     acc[cur]=(acc[cur]||0)+paid;
     return acc;
   },{});
@@ -1316,11 +1324,17 @@ function renderSettlement(){
           <span style="color:${rem>0?'var(--bad)':'var(--good)'};">남은 금액 <b>${rem>0?fmt(rem,p.currency):'완납 ✓'}</b></span>
         </div>
         ${plan.length?`<div style="border-top:1px solid var(--line);padding-top:10px;">
-          ${plan.map(m=>`<div class="row-flex" style="margin-bottom:8px;font-size:13px;" data-mid="${m.id}">
-            <span style="flex:1;">${escapeHtml(m.label)} <span style="color:var(--ink-soft);">${m.dueDate?`(${m.dueDate}) `:''} ${fmt(Number(m.amount||0),p.currency)}</span></span>
-            <span class="badge ${m.status==='입금완료'?'paid':m.status==='미청구'?'unbilled':'billed'}" style="margin-right:8px;">${m.status}</span>
-            ${m.status!=='입금완료'?`<button class="btn sm light msMarkPaidBtn" style="font-size:11px;padding:0 10px;height:28px;">입금완료</button>`:'<span style="font-size:11px;color:var(--good);padding:0 10px;">✓ 완료</span>'}
-          </div>`).join('')}
+          ${plan.map(m=>{
+            const dateLabel = m.status==='입금완료'
+              ? (m.paidDate ? `<span style="color:var(--good);font-size:11px;">입금: ${m.paidDate}</span>` : `<span style="color:var(--warn);font-size:11px;">입금일 없음</span>`)
+              : (m.dueDate ? `<span style="color:var(--ink-soft);font-size:11px;">예정: ${m.dueDate}</span>` : '');
+            const inThisMonth = m.status==='입금완료' && isSameMonth(m.paidDate, monthKey);
+            return `<div class="row-flex" style="margin-bottom:8px;font-size:13px;" data-mid="${m.id}">
+              <span style="flex:1;">${escapeHtml(m.label)}&nbsp;${dateLabel}&nbsp;<b>${fmt(Number(m.amount||0),p.currency)}</b>${inThisMonth?'<span style="font-size:10px;color:var(--good);margin-left:4px;">이번 달 집계</span>':''}</span>
+              <span class="badge ${m.status==='입금완료'?'paid':m.status==='미청구'?'unbilled':'billed'}" style="margin-right:8px;">${m.status}</span>
+              ${m.status!=='입금완료'?`<button class="btn sm light msMarkPaidBtn" style="font-size:11px;padding:0 10px;height:28px;">입금완료</button>`:'<span style="font-size:11px;color:var(--good);padding:0 10px;">✓ 완료</span>'}
+            </div>`;
+          }).join('')}
         </div>`:'<div class="empty" style="font-size:12px;">결제 단계가 없어요.</div>'}
       </div>`;
     }).join('');
@@ -2219,7 +2233,7 @@ function renderDashboard(){
     const baseIncome = incomes.filter(x=>(x.date||'').slice(0,7)===m && x.currency==='KRW' && x.sourceType!=='project_milestone').reduce((s,x)=>s+Number(x.amount||0),0);
     const projIncome = projects.reduce((s,p)=>{
       if((p.currency||'KRW')!=='KRW') return s;
-      return s + (p.paymentPlan||[]).filter(ms=>ms.status==='입금완료'&&ms.paidDate&&ms.paidDate.slice(0,7)===m).reduce((ss,ms)=>ss+Number(ms.amount||0),0);
+      return s + (p.paymentPlan||[]).filter(ms=>ms.status==='입금완료' && isSameMonth(ms.paidDate, m)).reduce((ss,ms)=>ss+Number(ms.amount||0),0);
     },0);
     return baseIncome + projIncome;
   });
@@ -2262,7 +2276,7 @@ function renderDashboard(){
   const totalT = tasks.length || 0;
   const pDone = totalT ? Math.round(counts.done / totalT * 100) : 0;
   document.getElementById('taskStat').innerHTML = `
-    <div class="row-flex" style="gap:0;margin-bottom:10px;">
+    <div class="row-flex" style="gap:0;margin-top:20px;margin-bottom:22px;">
       <div class="stat" style="flex:1;text-align:center;"><b>${counts.todo}</b><span>할 일</span></div>
       <div class="stat" style="flex:1;text-align:center;"><b>${counts.doing}</b><span>진행중</span></div>
       <div class="stat" style="flex:1;text-align:center;"><b>${counts.done}</b><span>완료</span></div>
@@ -2270,7 +2284,7 @@ function renderDashboard(){
     <div class="progressline">
       <i style="width:${pDone}%;background:#111111;border-radius:4px;"></i>
     </div>
-    <div style="font-size:11px;color:var(--ink-soft);margin-top:6px;text-align:right;">완료율 ${pDone}%</div>`;
+    <div style="font-size:11px;color:var(--ink-soft);margin-top:7px;text-align:right;">완료율 ${pDone}%</div>`;
 
   // recent entries (worklog)
   const recent = tasks.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);
